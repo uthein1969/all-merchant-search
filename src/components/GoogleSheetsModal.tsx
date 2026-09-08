@@ -1,0 +1,493 @@
+import React, { useState, useEffect } from 'react';
+import {
+  X,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  ExternalLink,
+  FolderOpen,
+  Mail,
+  Lock,
+  ArrowRight,
+  Database,
+  Layers,
+} from 'lucide-react';
+import { MerchantRecord } from '../types';
+import {
+  DEFAULT_SPREADSHEET_ID,
+  DEFAULT_SPREADSHEET_URL,
+  extractSpreadsheetId,
+  fetchGoogleSpreadsheetData,
+  GoogleDriveFile,
+  GoogleUser,
+  listGoogleDriveSpreadsheets,
+  requestGoogleAccessToken,
+  googleSignOut,
+  onGoogleAuthStateChanged,
+} from '../services/googleSheetsService';
+
+interface GoogleSheetsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onDataSynced: (records: MerchantRecord[], mode: 'replace' | 'append', meta: { title: string; id: string }) => void;
+  currentConnectedSheetId?: string;
+  currentConnectedSheetTitle?: string;
+  currentUser?: GoogleUser | null;
+  onUserUpdate: (user: GoogleUser | null, token: string | null) => void;
+  existingToken: string | null;
+}
+
+export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
+  isOpen,
+  onClose,
+  onDataSynced,
+  currentConnectedSheetId,
+  currentConnectedSheetTitle,
+  currentUser,
+  onUserUpdate,
+  existingToken,
+}) => {
+  const [token, setToken] = useState<string | null>(existingToken);
+  const [user, setUser] = useState<GoogleUser | null>(currentUser || null);
+  const [sheetUrlOrId, setSheetUrlOrId] = useState<string>(
+    currentConnectedSheetId ? `https://docs.google.com/spreadsheets/d/${currentConnectedSheetId}/edit` : DEFAULT_SPREADSHEET_URL
+  );
+  const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
+
+  // Loading & error states
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isFetchingData, setIsFetchingData] = useState(false);
+  const [progressMsg, setProgressMsg] = useState<string>('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Drive files
+  const [driveFiles, setDriveFiles] = useState<GoogleDriveFile[]>([]);
+  const [isLoadingDriveFiles, setIsLoadingDriveFiles] = useState(false);
+
+  useEffect(() => {
+    setToken(existingToken);
+  }, [existingToken]);
+
+  useEffect(() => {
+    setUser(currentUser || null);
+  }, [currentUser]);
+
+  // Auto-subscribe to Firebase Google Auth state
+  useEffect(() => {
+    const unsubscribe = onGoogleAuthStateChanged((newUser, newToken) => {
+      if (newUser && newToken) {
+        setUser(newUser);
+        setToken(newToken);
+        onUserUpdate(newUser, newToken);
+      }
+    });
+    return () => unsubscribe();
+  }, [onUserUpdate]);
+
+  // When token becomes available, auto-load recent Drive spreadsheets
+  useEffect(() => {
+    if (token) {
+      loadDriveFiles(token);
+    }
+  }, [token]);
+
+  const loadDriveFiles = async (authToken: string) => {
+    setIsLoadingDriveFiles(true);
+    try {
+      const files = await listGoogleDriveSpreadsheets(authToken);
+      setDriveFiles(files);
+    } catch (err: unknown) {
+      console.warn('Could not load Drive spreadsheets:', err);
+    } finally {
+      setIsLoadingDriveFiles(false);
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setIsAuthenticating(true);
+    try {
+      const { accessToken, user: gUser } = await requestGoogleAccessToken('uthein1969@gmail.com');
+      setToken(accessToken);
+      const updatedUser = gUser || { email: 'uthein1969@gmail.com', name: 'Google Account' };
+      setUser(updatedUser);
+      onUserUpdate(updatedUser, accessToken);
+      setSuccessMsg('Successfully connected to Google Workspace account.');
+      await loadDriveFiles(accessToken);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Google authentication failed';
+      setErrorMsg(msg);
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    await googleSignOut();
+    setToken(null);
+    setUser(null);
+    onUserUpdate(null, null);
+    setDriveFiles([]);
+    setSuccessMsg('Disconnected from Google account.');
+  };
+
+  const handleSyncSpreadsheet = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    let activeToken = token;
+    if (!activeToken) {
+      // Prompt for login first
+      setIsAuthenticating(true);
+      try {
+        const auth = await requestGoogleAccessToken('uthein1969@gmail.com');
+        activeToken = auth.accessToken;
+        setToken(auth.accessToken);
+        const updatedUser = auth.user || { email: 'uthein1969@gmail.com', name: 'Google Account' };
+        setUser(updatedUser);
+        onUserUpdate(updatedUser, auth.accessToken);
+      } catch (err: unknown) {
+        setIsAuthenticating(false);
+        setErrorMsg(err instanceof Error ? err.message : 'Google authorization is required to read shared sheets.');
+        return;
+      }
+      setIsAuthenticating(false);
+    }
+
+    const cleanId = extractSpreadsheetId(sheetUrlOrId);
+    if (!cleanId) {
+      setErrorMsg('Please enter a valid Google Sheet URL or ID.');
+      return;
+    }
+
+    setIsFetchingData(true);
+    setProgressMsg('Connecting to Google Sheets API...');
+
+    try {
+      const result = await fetchGoogleSpreadsheetData(cleanId, activeToken, (msg) => {
+        setProgressMsg(msg);
+      });
+
+      if (result.records.length === 0) {
+        throw new Error('No merchant rows found. Please check that the sheet has data and matching columns.');
+      }
+
+      onDataSynced(result.records, importMode, {
+        title: result.title,
+        id: result.spreadsheetId,
+      });
+
+      setSuccessMsg(
+        `Successfully synced ${result.totalRecords} records across ${result.sheetNames.length} sheet tab(s) from "${result.title}".`
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch Google Sheet data.';
+      setErrorMsg(message);
+    } finally {
+      setIsFetchingData(false);
+      setProgressMsg('');
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div
+        id="google-sheets-modal"
+        className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/80">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm">
+              <FileSpreadsheet className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-800">
+                Connect Google Sheets
+              </h2>
+              <p className="text-xs text-slate-500">
+                Directly sync KYC merchant data from your shared Google Sheet
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-sm text-slate-700">
+          {/* Account Connection Status */}
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/90 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Google Workspace Account
+              </span>
+              {token ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Connected
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-700">
+                  <Lock className="w-3 h-3" />
+                  Not Connected
+                </span>
+              )}
+            </div>
+
+            {token && user ? (
+              <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-slate-200">
+                <div className="flex items-center gap-3">
+                  {user.picture ? (
+                    <img src={user.picture} alt="Avatar" className="w-9 h-9 rounded-full" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-emerald-700 text-white font-bold flex items-center justify-center text-sm">
+                      {user.email ? user.email.charAt(0).toUpperCase() : 'G'}
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs font-semibold text-slate-900">{user.name || 'Google User'}</p>
+                    <p className="text-xs text-slate-500 flex items-center gap-1">
+                      <Mail className="w-3 h-3 text-slate-400" />
+                      {user.email || 'uthein1969@gmail.com'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDisconnect}
+                  className="text-xs text-slate-500 hover:text-red-600 px-2.5 py-1.5 rounded-md hover:bg-red-50 transition-colors cursor-pointer"
+                >
+                  Disconnect
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-slate-200">
+                <div className="text-xs text-slate-600">
+                  <p className="font-medium text-slate-800">Sign in with your Gmail account</p>
+                  <p className="text-slate-500">
+                    Target account: <span className="font-semibold text-slate-700">uthein1969@gmail.com</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleConnectGoogle}
+                  disabled={isAuthenticating}
+                  className="flex items-center gap-2.5 px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 hover:text-slate-900 disabled:opacity-60 rounded-lg font-medium text-xs shadow-sm transition-all cursor-pointer shrink-0"
+                >
+                  {isAuthenticating ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                      <span>Signing in...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 48 48">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                      </svg>
+                      <span className="font-semibold text-slate-800">Sign In with Google</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Google Sheet URL or ID input */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label htmlFor="input-sheet-url" className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                Google Sheet Link / Spreadsheet ID
+              </label>
+              <button
+                type="button"
+                onClick={() => setSheetUrlOrId(DEFAULT_SPREADSHEET_URL)}
+                className="text-[11px] text-emerald-700 hover:text-emerald-800 underline font-medium cursor-pointer"
+              >
+                Use "All Merchant KYC" Default
+              </button>
+            </div>
+
+            <div className="relative">
+              <input
+                id="input-sheet-url"
+                type="text"
+                value={sheetUrlOrId}
+                onChange={(e) => setSheetUrlOrId(e.target.value)}
+                placeholder="https://docs.google.com/spreadsheets/d/... or Spreadsheet ID"
+                className="w-full text-xs font-mono px-3 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-slate-800 placeholder:text-slate-400"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 flex items-center justify-between">
+              <span>Paste full URL or spreadsheet ID. Supports all tabs automatically.</span>
+              <a
+                href={sheetUrlOrId.startsWith('http') ? sheetUrlOrId : `https://docs.google.com/spreadsheets/d/${sheetUrlOrId}/edit`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-emerald-700 hover:underline inline-flex items-center gap-0.5"
+              >
+                Open in Google Sheets <ExternalLink className="w-2.5 h-2.5" />
+              </a>
+            </p>
+          </div>
+
+          {/* Quick Select from Drive files */}
+          {token && driveFiles.length > 0 && (
+            <div className="space-y-1.5">
+              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                <FolderOpen className="w-3.5 h-3.5 text-slate-500" />
+                Select from your Google Drive / Shared Sheets
+              </span>
+              <div className="max-h-36 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100 bg-white">
+                {driveFiles.map((file) => {
+                  const isSelected = extractSpreadsheetId(sheetUrlOrId) === file.id;
+                  return (
+                    <button
+                      key={file.id}
+                      type="button"
+                      onClick={() => setSheetUrlOrId(`https://docs.google.com/spreadsheets/d/${file.id}/edit`)}
+                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer ${
+                        isSelected ? 'bg-emerald-50 text-emerald-900 font-medium' : 'text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate mr-2">
+                        <FileSpreadsheet className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-emerald-600' : 'text-slate-400'}`} />
+                        <span className="truncate">{file.name}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 shrink-0">
+                        {file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString() : ''}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Import Mode Options */}
+          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+            <span className="text-xs font-semibold text-slate-700 block">
+              Sync Mode
+            </span>
+            <div className="grid grid-cols-2 gap-3">
+              <label
+                className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                  importMode === 'replace'
+                    ? 'border-emerald-600 bg-white shadow-xs text-emerald-900'
+                    : 'border-slate-200 hover:border-slate-300 text-slate-600 bg-white'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="sync-mode"
+                  checked={importMode === 'replace'}
+                  onChange={() => setImportMode('replace')}
+                  className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                />
+                <div>
+                  <p className="text-xs font-semibold">Replace Existing Data</p>
+                  <p className="text-[11px] text-slate-500">Overwrites current list with fresh Google Sheet data</p>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                  importMode === 'append'
+                    ? 'border-emerald-600 bg-white shadow-xs text-emerald-900'
+                    : 'border-slate-200 hover:border-slate-300 text-slate-600 bg-white'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="sync-mode"
+                  checked={importMode === 'append'}
+                  onChange={() => setImportMode('append')}
+                  className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                />
+                <div>
+                  <p className="text-xs font-semibold">Append to Existing</p>
+                  <p className="text-[11px] text-slate-500">Keeps existing records and adds new rows</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Feedback messages */}
+          {errorMsg && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold">Error connecting to Google Sheet</p>
+                <p>{errorMsg}</p>
+                <p className="text-[11px] text-red-600">
+                  Tip: Ensure the Google Sheet is shared with your account (uthein1969@gmail.com) with Viewer permissions.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {successMsg && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+              <div>
+                <p className="font-semibold">Success</p>
+                <p>{successMsg}</p>
+              </div>
+            </div>
+          )}
+
+          {isFetchingData && progressMsg && (
+            <div className="p-3 bg-emerald-50/70 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2.5">
+              <RefreshCw className="w-4 h-4 text-emerald-600 animate-spin shrink-0" />
+              <span className="font-medium">{progressMsg}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+
+          <button
+            id="btn-sync-google-sheet"
+            type="button"
+            onClick={handleSyncSpreadsheet}
+            disabled={isFetchingData || isAuthenticating || !sheetUrlOrId.trim()}
+            className="flex items-center gap-2 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-300 text-white rounded-lg font-semibold text-xs shadow-md transition-colors cursor-pointer"
+          >
+            {isFetchingData ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Syncing Sheets...</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Fetch & Sync Google Sheet</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

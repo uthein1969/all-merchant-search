@@ -1,0 +1,6 @@
+{
+  "name": "Merchant KYC Search",
+  "description": "Search merchant KYC data across multi-sheets by Business Name, NRC last 6 digits, and Phone Number.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
