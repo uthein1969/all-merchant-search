@@ -138,25 +138,6 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    let activeToken = token;
-    if (!activeToken) {
-      // Prompt for login first
-      setIsAuthenticating(true);
-      try {
-        const auth = await requestGoogleAccessToken('uthein1969@gmail.com');
-        activeToken = auth.accessToken;
-        setToken(auth.accessToken);
-        const updatedUser = auth.user || { email: 'uthein1969@gmail.com', name: 'Google Account' };
-        setUser(updatedUser);
-        onUserUpdate(updatedUser, auth.accessToken);
-      } catch (err: unknown) {
-        setIsAuthenticating(false);
-        setErrorMsg(err instanceof Error ? err.message : 'Google authorization is required to read shared sheets.');
-        return;
-      }
-      setIsAuthenticating(false);
-    }
-
     const cleanId = extractSpreadsheetId(sheetUrlOrId);
     if (!cleanId) {
       setErrorMsg('Please enter a valid Google Sheet URL or ID.');
@@ -164,12 +145,16 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
     }
 
     setIsFetchingData(true);
-    setProgressMsg('Connecting to Google Sheets API...');
+    setProgressMsg('Connecting to Google Sheet...');
 
     try {
-      const result = await fetchGoogleSpreadsheetData(cleanId, activeToken, (msg) => {
-        setProgressMsg(msg);
-      });
+      // Direct Link Sync: uses token if logged in, or direct public link parsing if shared
+      const result = await fetchGoogleSpreadsheetData(
+        cleanId,
+        token,
+        (msg) => setProgressMsg(msg),
+        sheetUrlOrId
+      );
 
       if (result.records.length === 0) {
         throw new Error('No merchant rows found. Please check that the sheet has data and matching columns.');
@@ -305,6 +290,17 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
             )}
           </div>
 
+          {/* Direct Link Information Banner */}
+          <div className="bg-emerald-50/80 rounded-xl p-3.5 border border-emerald-200/80 text-xs text-emerald-900 space-y-1.5">
+            <div className="flex items-center gap-1.5 font-semibold text-emerald-800">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Direct Google Sheet Link Sync (Vercel & Web)</span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-emerald-700">
+              Google Sheet Link (<span className="font-mono">https://docs.google.com/spreadsheets/d/...</span>) ကို အောက်ပါ box တွင် paste လုပ်ပြီး တိုက်ရိုက် ချိတ်ဆက်နိုင်ပါသည်။ Google Sheet တွင် <strong>"Anyone with the link can view"</strong> ထားရှိပါက Sign In မလိုဘဲ တိုက်ရိုက် Sync လုပ်နိုင်ပါသည်။
+            </p>
+          </div>
+
           {/* Google Sheet URL or ID input */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -427,14 +423,22 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
 
           {/* Feedback messages */}
           {errorMsg && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-start gap-2">
+            <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-start gap-2.5">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <div className="space-y-1">
+              <div className="space-y-1.5 flex-1">
                 <p className="font-semibold">Error connecting to Google Sheet</p>
-                <p>{errorMsg}</p>
-                <p className="text-[11px] text-red-600">
-                  Tip: Ensure the Google Sheet is shared with your account (uthein1969@gmail.com) with Viewer permissions.
-                </p>
+                <p className="text-[12px] leading-relaxed whitespace-pre-line">{errorMsg}</p>
+                <div className="pt-1 border-t border-red-200/80 text-[11px] text-red-700 space-y-1">
+                  <p className="font-medium">အဆင်ပြေစေမည့် နည်းလမ်းများ (Quick Tips):</p>
+                  <ul className="list-disc pl-4 space-y-0.5">
+                    <li>
+                      <strong>Link ဖြင့် တိုက်ရိုက်ချိတ်ဆက်ရန်:</strong> Google Sheet တွင် <strong>Share</strong> ကိုနှိပ်ပြီး General access တွင် <strong>"Anyone with the link can view"</strong> ဟု ပြောင်းလဲပေးလိုက်ပါက Sign-In မလိုဘဲ တိုက်ရိုက် Sync လုပ်နိုင်ပါသည်။
+                    </li>
+                    <li>
+                      <strong>Google Account ဖြင့် ချိတ်ဆက်ရန်:</strong> အထက်ပါ "Sign In with Google" ခလုတ်ကို နှိပ်ပြီး <strong>uthein1969@gmail.com</strong> ဖြင့် ဝင်ရောက်အသုံးပြုပါ။
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
           )}

@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { parseExcelFile, parsePastedData } from '../utils/sheetParser';
 import { MerchantRecord } from '../types';
-import { X, UploadCloud, FileSpreadsheet, ClipboardPaste, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, UploadCloud, FileSpreadsheet, ClipboardPaste, CheckCircle2, AlertCircle, Link2 } from 'lucide-react';
+import { fetchGoogleSpreadsheetData } from '../services/googleSheetsService';
 
 interface ImportModalProps {
   onClose: () => void;
@@ -43,9 +44,9 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) =
     }
   };
 
-  const handlePastedSubmit = () => {
+  const handlePastedSubmit = async () => {
     if (!pastedText.trim()) {
-      setErrorMsg('Please paste some data first.');
+      setErrorMsg('Please paste table rows or a Google Sheet link.');
       return;
     }
     setErrorMsg(null);
@@ -53,17 +54,29 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) =
     setIsProcessing(true);
 
     try {
-      const result = parsePastedData(pastedText, sheetNameInput || 'Google Sheet Import');
-      if (result.records.length === 0) {
-        throw new Error('No valid records found in the pasted data.');
+      if (pastedText.trim().includes('docs.google.com/spreadsheets')) {
+        const syncRes = await fetchGoogleSpreadsheetData(pastedText.trim(), null, undefined, pastedText.trim());
+        if (syncRes.records.length === 0) {
+          throw new Error('No valid merchant rows found in the Google Sheet link.');
+        }
+        setSuccessMsg(`Successfully imported ${syncRes.totalRecords} records from Google Sheet.`);
+        setTimeout(() => {
+          onImport(syncRes.records, mode);
+          onClose();
+        }, 700);
+      } else {
+        const result = parsePastedData(pastedText, sheetNameInput || 'Google Sheet Import');
+        if (result.records.length === 0) {
+          throw new Error('No valid records found in the pasted data.');
+        }
+        setSuccessMsg(result.summary);
+        setTimeout(() => {
+          onImport(result.records, mode);
+          onClose();
+        }, 700);
       }
-      setSuccessMsg(result.summary);
-      setTimeout(() => {
-        onImport(result.records, mode);
-        onClose();
-      }, 700);
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to parse pasted data.');
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to process data.');
     } finally {
       setIsProcessing(false);
     }
@@ -220,13 +233,13 @@ export const ImportModal: React.FC<ImportModalProps> = ({ onClose, onImport }) =
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Paste rows directly copied from Google Sheets (Ctrl + V):
+                  Paste rows copied from Google Sheets OR paste direct Google Sheet Link:
                 </label>
                 <textarea
                   rows={7}
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
-                  placeholder={`BUSINESS NAME\tMERCHANT CODE\tNATURE OF BUSINESS\tOWNER/DIRECTOR\tNRC\tPH\tBANK ACC\nFAMILY -2\t20500312\tFOOD AND BEVERAGE\tU AUNG KHAING NYEIN\t5/WALANA(N)105885\t95154867\t23210199916742700`}
+                  placeholder={`Option 1 - Direct Link: https://docs.google.com/spreadsheets/d/...\n\nOption 2 - Copied Rows (Ctrl + V):\nBUSINESS NAME\tMERCHANT CODE\tNATURE OF BUSINESS\tOWNER/DIRECTOR\tNRC\tPH\tBANK ACC\nFAMILY -2\t20500312\tFOOD AND BEVERAGE\tU AUNG KHAING NYEIN\t5/WALANA(N)105885\t95154867\t23210199916742700`}
                   className="w-full p-2.5 text-xs font-mono border border-gray-200 rounded-lg bg-gray-50 focus:bg-white text-gray-800 focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
