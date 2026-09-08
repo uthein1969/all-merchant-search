@@ -245,6 +245,7 @@ export default function App() {
         currentConnectedSheetTitle={connectedSheetMeta?.title}
         currentUser={googleUser}
         existingToken={googleToken}
+        onOpenImportModal={() => setIsImportOpen(true)}
         onUserUpdate={(user, token) => {
           setGoogleUser(user);
           setGoogleToken(token);

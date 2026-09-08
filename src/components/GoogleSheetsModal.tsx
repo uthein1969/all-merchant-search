@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   FileSpreadsheet,
@@ -12,6 +12,10 @@ import {
   ArrowRight,
   Database,
   Layers,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
+  UploadCloud,
 } from 'lucide-react';
 import { MerchantRecord } from '../types';
 import {
@@ -36,6 +40,7 @@ interface GoogleSheetsModalProps {
   currentUser?: GoogleUser | null;
   onUserUpdate: (user: GoogleUser | null, token: string | null) => void;
   existingToken: string | null;
+  onOpenImportModal?: () => void;
 }
 
 export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
@@ -47,6 +52,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
   currentUser,
   onUserUpdate,
   existingToken,
+  onOpenImportModal,
 }) => {
   const [token, setToken] = useState<string | null>(existingToken);
   const [user, setUser] = useState<GoogleUser | null>(currentUser || null);
@@ -54,6 +60,8 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
     currentConnectedSheetId ? `https://docs.google.com/spreadsheets/d/${currentConnectedSheetId}/edit` : DEFAULT_SPREADSHEET_URL
   );
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
+  const [showGuide, setShowGuide] = useState(false);
+  const feedbackRef = useRef<HTMLDivElement>(null);
 
   // Loading & error states
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -120,6 +128,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Google authentication failed';
       setErrorMsg(msg);
+      setShowGuide(true);
     } finally {
       setIsAuthenticating(false);
     }
@@ -171,6 +180,7 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to fetch Google Sheet data.';
       setErrorMsg(message);
+      setShowGuide(true);
     } finally {
       setIsFetchingData(false);
       setProgressMsg('');
@@ -291,14 +301,60 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
           </div>
 
           {/* Direct Link Information Banner */}
-          <div className="bg-emerald-50/80 rounded-xl p-3.5 border border-emerald-200/80 text-xs text-emerald-900 space-y-1.5">
-            <div className="flex items-center gap-1.5 font-semibold text-emerald-800">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Direct Google Sheet Link Sync (Vercel & Web)</span>
+          <div className="bg-emerald-50/80 rounded-xl p-3.5 border border-emerald-200/80 text-xs text-emerald-900 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Google Sheet Link ဖြင့် တိုက်ရိုက် ချိတ်ဆက်ခြင်း (အကြံပြုထားသောနည်းလမ်း)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGuide(!showGuide)}
+                className="text-emerald-700 hover:text-emerald-900 underline font-medium text-[11px] flex items-center gap-1 cursor-pointer"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                {showGuide ? 'လမ်းညွှန် ပိတ်မည်' : 'လင့်ခ်ယူနည်း (၃ ဆင့်)'}
+                {showGuide ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
             </div>
             <p className="text-[11px] leading-relaxed text-emerald-700">
-              Google Sheet Link (<span className="font-mono">https://docs.google.com/spreadsheets/d/...</span>) ကို အောက်ပါ box တွင် paste လုပ်ပြီး တိုက်ရိုက် ချိတ်ဆက်နိုင်ပါသည်။ Google Sheet တွင် <strong>"Anyone with the link can view"</strong> ထားရှိပါက Sign In မလိုဘဲ တိုက်ရိုက် Sync လုပ်နိုင်ပါသည်။
+              Google Sheet တွင် <strong>"Anyone with the link can view"</strong> ဟု ထားရှိပေးလိုက်ပါက Gmail Login ဝင်စရာမလိုဘဲ အောက်ပါ Box တွင် Sheet Link ထည့်ပြီး တိုက်ရိုက် Sync လုပ်နိုင်ပါသည်။
             </p>
+
+            {/* Step-by-Step Burmese Guide */}
+            {showGuide && (
+              <div className="bg-white/90 border border-emerald-200 rounded-lg p-3 mt-2 space-y-2 text-slate-700 shadow-xs">
+                <p className="font-bold text-emerald-900 text-xs flex items-center gap-1">
+                  📋 Google Sheet တွင် "Share" ဖွင့်နည်း (၃ ဆင့် လမ်းညွှန်):
+                </p>
+                <ol className="space-y-1.5 text-[11px] list-none">
+                  <li className="flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-emerald-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                      ၁
+                    </span>
+                    <span>
+                      မိမိ Google Sheet ကိုဖွင့်ပြီး အပေါ်ညာဘက်ရှိ အပြာရောင် <strong>"Share" (မျှဝေရန်)</strong> ခလုတ်ကို နှိပ်ပါ။
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-emerald-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                      ၂
+                    </span>
+                    <span>
+                      "General access" အောက်တွင် "Restricted" အစား <strong>"Anyone with the link" (လင့်ခ်ရှိသူ မည်သူမဆို)</strong> သို့ ရွေးပေးပါ။ (ညာဘက်တွင် <strong>Viewer / ကြည့်ရှုသူ</strong> ဖြစ်နေပါစေ)။
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-4 h-4 rounded-full bg-emerald-700 text-white font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                      ၃
+                    </span>
+                    <span>
+                      အောက်ဘက်ရှိ <strong>"Copy link" (လင့်ခ်ကူးယူရန်)</strong> ကို နှိပ်ပြီး အောက်ပါ Box တွင် Paste လုပ်ကာ <strong>"Fetch & Sync Google Sheet"</strong> ကို နှိပ်လိုက်ပါ။
+                    </span>
+                  </li>
+                </ol>
+              </div>
+            )}
           </div>
 
           {/* Google Sheet URL or ID input */}
@@ -463,13 +519,28 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
 
         {/* Modal Footer */}
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            {onOpenImportModal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenImportModal();
+                }}
+                className="text-xs text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 font-medium cursor-pointer"
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                Upload Excel (.xlsx) Instead
+              </button>
+            )}
+          </div>
 
           <button
             id="btn-sync-google-sheet"

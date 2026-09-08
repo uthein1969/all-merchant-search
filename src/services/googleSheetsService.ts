@@ -7,6 +7,7 @@ import {
   User,
   signOut as fbSignOut,
 } from 'firebase/auth';
+import * as XLSX from 'xlsx';
 import firebaseConfig from '../config/firebaseConfig';
 import { MerchantRecord } from '../types';
 import { extractNrcLast6, normalizePhone } from '../utils/searchHelper';
@@ -103,11 +104,15 @@ export async function googleSignIn(): Promise<{ accessToken: string; user: Googl
     console.error('Sign-in error:', error);
     if (error.code === 'auth/unauthorized-domain') {
       throw new Error(
-        'Firebase domain unauthorized: "all-merchant-search.vercel.app" is not added to Firebase Console Authorized Domains. Fix: In Firebase Console -> Authentication -> Settings -> Authorized Domains, add "all-merchant-search.vercel.app". OR share your Google Sheet as "Anyone with the link can view" to sync directly without signing in!'
+        'Gmail Sign-in Box ပေါ်ပြီး ချက်ချင်း ပျောက်သွားရခြင်းမှာ Vercel Domain ("all-merchant-search.vercel.app") ကို Firebase Authentication ၏ Authorized Domains စာရင်းထဲ မထည့်ရသေးသောကြောင့် ဖြစ်ပါသည်။\n\n' +
+        '👉 အလွယ်ကူဆုံး ဖြေရှင်းနည်း: Google Sheet တွင် "Anyone with the link can view" ဟု Share ပြောင်းပေးလိုက်ပါက Sign-In မလိုဘဲ အောက်ပါ Box တွင် Link ထည့်ပြီး "Fetch & Sync Google Sheet" ဖြင့် တိုက်ရိုက် ရယူနိုင်ပါသည်။'
       );
     }
     if (error.code === 'auth/popup-closed-by-user') {
-      throw new Error('Sign-in popup was closed before completing. Please click Sign In again.');
+      throw new Error(
+        'Sign-in Box ပေါ်ပြီး ချက်ချင်း ပျောက်သွားပါက Domain ကန့်သတ်ချက် (Authorized Domain) သို့မဟုတ် Browser Popup ပိတ်ထားခြင်းကြောင့် ဖြစ်နိုင်ပါသည်။\n\n' +
+        '👉 Google Sheet တွင် "Anyone with the link can view" ဟု Share လုပ်ထားပါက Gmail Sign In လုပ်စရာမလိုဘဲ အောက်ပါ "Direct Google Sheet Link" ဖြင့် တိုက်ရိုက် Sync ပြုလုပ်နိုင်ပါသည်။'
+      );
     }
     if (error.code === 'auth/cancelled-popup-request') {
       throw new Error('Popup request was cancelled. Please retry.');
@@ -198,8 +203,8 @@ interface ColumnIndexMap {
 function matchHeaderIndex(headers: string[], patterns: string[]): number {
   for (const pattern of patterns) {
     const idx = headers.findIndex((h) => {
-      const clean = (h || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-      const cleanP = pattern.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const clean = (h || '').trim().toLowerCase().replace(/[\s_\-./\\(),]/g, '');
+      const cleanP = pattern.toLowerCase().replace(/[\s_\-./\\(),]/g, '');
       return clean === cleanP || clean.includes(cleanP);
     });
     if (idx !== -1) return idx;
@@ -209,17 +214,84 @@ function matchHeaderIndex(headers: string[], patterns: string[]): number {
 
 function detectColumnIndices(headerRow: string[]): ColumnIndexMap {
   return {
-    sr: matchHeaderIndex(headerRow, ['sr', 'srno', 'no', 'serial']),
-    businessName: matchHeaderIndex(headerRow, ['businessname', 'business', 'shopname', 'merchantname', 'shop', 'name']),
-    date: matchHeaderIndex(headerRow, ['date', 'regdate', 'createddate']),
-    merchantCode: matchHeaderIndex(headerRow, ['merchantcode', 'code', 'mid', 'merchantid']),
-    natureOfBusiness: matchHeaderIndex(headerRow, ['natureofbusiness', 'nature', 'businesstype', 'category']),
-    ownerDirector: matchHeaderIndex(headerRow, ['ownerdirector', 'owner', 'director', 'proprietor']),
-    nrc: matchHeaderIndex(headerRow, ['nrc', 'nationalid', 'nrcno', 'idcard', 'nrcnumber']),
-    phone: matchHeaderIndex(headerRow, ['ph', 'phone', 'phonenumber', 'tel', 'mobile', 'contact']),
-    bankAcc: matchHeaderIndex(headerRow, ['bankacc', 'bankaccount', 'accno', 'accountno', 'bank']),
-    status: matchHeaderIndex(headerRow, ['status', 'merchantportal', 'merchantportalstatus', 'remark']),
+    sr: matchHeaderIndex(headerRow, ['sr', 'srno', 'no', 'serial', 'စဉ်', 'စဥ်']),
+    businessName: matchHeaderIndex(headerRow, [
+      'businessname',
+      'business',
+      'shopname',
+      'merchantname',
+      'shop',
+      'name',
+      'tradename',
+      'ဆိုင်အမည်',
+      'လုပ်ငန်းအမည်',
+      'အမည်',
+    ]),
+    date: matchHeaderIndex(headerRow, ['date', 'regdate', 'createddate', 'entrydate', 'ရက်စွဲ']),
+    merchantCode: matchHeaderIndex(headerRow, ['merchantcode', 'code', 'mid', 'merchantid', 'id', 'ကုဒ်']),
+    natureOfBusiness: matchHeaderIndex(headerRow, [
+      'natureofbusiness',
+      'nature',
+      'businesstype',
+      'category',
+      'type',
+      'လုပ်ငန်းအမျိုးအစား',
+      'အမျိုးအစား',
+    ]),
+    ownerDirector: matchHeaderIndex(headerRow, ['ownerdirector', 'owner', 'director', 'proprietor', 'ပိုင်ရှင်', 'ဒါရိုက်တာ']),
+    nrc: matchHeaderIndex(headerRow, ['nrc', 'nationalid', 'nrcno', 'idcard', 'nrcnumber', 'မှတ်ပုံတင်', 'မှတ်ပုံတင်အမှတ်']),
+    phone: matchHeaderIndex(headerRow, ['ph', 'phone', 'phonenumber', 'tel', 'mobile', 'contact', 'ဖုန်း', 'ဖုန်းနံပါတ်']),
+    bankAcc: matchHeaderIndex(headerRow, ['bankacc', 'bankaccount', 'accno', 'accountno', 'bank', 'ဘဏ်စာရင်း', 'အကောင့်']),
+    status: matchHeaderIndex(headerRow, ['status', 'merchantportal', 'merchantportalstatus', 'remark', 'portalstatus', 'အခြေအနေ']),
   };
+}
+
+/**
+ * Strict validator to guarantee that no HTML script/tags or error pages can ever be mistaken for merchant records
+ */
+function isValidMerchantRecord(rec: {
+  businessName?: string;
+  nrc?: string;
+  phone?: string;
+  merchantCode?: string;
+}): boolean {
+  const name = (rec.businessName || '').trim();
+  const phone = (rec.phone || '').trim();
+  const nrc = (rec.nrc || '').trim();
+  const code = (rec.merchantCode || '').trim();
+
+  // Guard against HTML / Javascript leaking into fields
+  const combined = `${name} ${phone} ${nrc} ${code}`.toLowerCase();
+  if (
+    combined.includes('<html') ||
+    combined.includes('<!doctype') ||
+    combined.includes('<script') ||
+    combined.includes('<div') ||
+    combined.includes('<meta') ||
+    combined.includes('google drive') ||
+    combined.includes('page not found') ||
+    combined.includes('unable to open') ||
+    combined.includes('function(') ||
+    combined.includes('window[') ||
+    combined.includes('var ') ||
+    combined.includes('self.') ||
+    combined.includes('servicelogin')
+  ) {
+    return false;
+  }
+
+  // Must have at least one valid merchant attribute:
+  // 1. Phone number with 5+ digits
+  const hasValidPhone = /\d{5,}/.test(phone);
+  // 2. NRC with '/' or '(N)' or 5+ digits
+  const hasValidNrc = nrc.length >= 5 && (nrc.includes('/') || nrc.includes('(') || /\d{5,}/.test(nrc));
+  // 3. Merchant code with 3+ characters (e.g. 20500312)
+  const hasValidCode = code.length >= 3 && !code.includes(' ');
+  // 4. Meaningful business name (at least 2 letters, not code brackets)
+  const hasValidName = name.length >= 2 && !name.includes('{') && !name.includes(';') && !name.includes('=');
+
+  // Must have at least a name + (phone or nrc or code), OR valid code/phone/nrc
+  return Boolean(hasValidPhone || hasValidNrc || hasValidCode || (hasValidName && (hasValidPhone || hasValidNrc || hasValidCode)));
 }
 
 function parseCsvLine(line: string): string[] {
@@ -248,7 +320,7 @@ function parseCsvLine(line: string): string[] {
 
 /**
  * Fetch and parse data from a public Google Sheet (shared as "Anyone with the link can view")
- * without requiring OAuth login. Uses Google Visualization API and HTML views.
+ * without requiring OAuth login. Uses direct XLSX export, Google Visualization API, and CSV fallback.
  */
 export async function fetchPublicSpreadsheetData(
   spreadsheetId: string,
@@ -257,27 +329,153 @@ export async function fetchPublicSpreadsheetData(
 ): Promise<GoogleSyncResult> {
   const cleanId = extractSpreadsheetId(spreadsheetId);
   if (!cleanId) {
-    throw new Error('Please provide a valid Google Spreadsheet ID or URL.');
+    throw new Error('Google Spreadsheet Link သို့မဟုတ် ID မမှန်ကန်ပါ။ ကျေးဇူးပြု၍ ပြန်လည်စစ်ဆေးပေးပါ။');
   }
 
   const specificGid = rawUrl ? extractGid(rawUrl) : null;
-  onProgress?.('Accessing Google Sheet directly via link...');
+  onProgress?.('Google Sheet သို့ တိုက်ရိုက်ချိတ်ဆက်နေပါသည်...');
 
-  let discoveredSheetNames: string[] = [];
   let spreadsheetTitle = 'Google Sheet KYC';
+  const allRecords: MerchantRecord[] = [];
+  const validSheets: string[] = [];
 
-  // 1. Try to discover sheet tab names from htmlview
+  // ==========================================
+  // METHOD 1: Direct XLSX Export (Google Docs)
+  // ==========================================
+  try {
+    onProgress?.('Google Sheet အချက်အလက်များကို ဒေါင်းလုဒ်ရယူနေပါသည် (Excel Format)...');
+    const xlsxUrl = `https://docs.google.com/spreadsheets/d/${cleanId}/export?format=xlsx`;
+    const xlsxRes = await fetch(xlsxUrl, { credentials: 'omit' });
+
+    if (xlsxRes.ok) {
+      const buffer = await xlsxRes.arrayBuffer();
+      const uint8 = new Uint8Array(buffer);
+      // Verify PK zip signature (0x50, 0x4B) for a genuine XLSX binary file
+      if (uint8.length > 100 && uint8[0] === 0x50 && uint8[1] === 0x4B) {
+        const workbook = XLSX.read(uint8, { type: 'array' });
+        if (workbook.SheetNames && workbook.SheetNames.length > 0) {
+          spreadsheetTitle = 'Google Sheet (Direct Link)';
+          for (let sIdx = 0; sIdx < workbook.SheetNames.length; sIdx++) {
+            const sName = workbook.SheetNames[sIdx];
+            const sheetObj = workbook.Sheets[sName];
+            if (!sheetObj) continue;
+
+            const rows: any[][] = XLSX.utils.sheet_to_json(sheetObj, { header: 1, defval: '' });
+            if (rows.length < 2) continue;
+
+            // Search first 10 rows to detect the true header row
+            let headerRowIdx = 0;
+            for (let r = 0; r < Math.min(rows.length, 10); r++) {
+              const rowStr = (rows[r] || []).join(' ').toLowerCase();
+              if (
+                rowStr.includes('business') ||
+                rowStr.includes('merchant') ||
+                rowStr.includes('code') ||
+                rowStr.includes('nrc') ||
+                rowStr.includes('phone') ||
+                rowStr.includes('ph') ||
+                rowStr.includes('ဆိုင်') ||
+                rowStr.includes('အမည်')
+              ) {
+                headerRowIdx = r;
+                break;
+              }
+            }
+
+            const headerRow = (rows[headerRowIdx] || []).map((c: any) => String(c ?? '').trim());
+            const colMap = detectColumnIndices(headerRow);
+            if (colMap.businessName === -1 && colMap.nrc === -1 && colMap.phone === -1) {
+              colMap.sr = 0;
+              colMap.businessName = 1;
+              colMap.date = 2;
+              colMap.merchantCode = 3;
+              colMap.natureOfBusiness = 4;
+              colMap.ownerDirector = 5;
+              colMap.nrc = 6;
+              colMap.phone = 7;
+              colMap.bankAcc = 8;
+              colMap.status = 9;
+            }
+
+            let tabCount = 0;
+            for (let rIdx = headerRowIdx + 1; rIdx < rows.length; rIdx++) {
+              const row = rows[rIdx] || [];
+              if (row.length === 0) continue;
+
+              const getVal = (idx: number) => (idx >= 0 && idx < row.length ? String(row[idx] ?? '').trim() : '');
+              const bName = getVal(colMap.businessName);
+              const nrc = getVal(colMap.nrc);
+              const phone = getVal(colMap.phone);
+              const mCode = getVal(colMap.merchantCode);
+              const nature = getVal(colMap.natureOfBusiness);
+              const owner = getVal(colMap.ownerDirector);
+              const bank = getVal(colMap.bankAcc);
+              const sr = getVal(colMap.sr) || tabCount + 1;
+              const date = getVal(colMap.date);
+              const status = getVal(colMap.status);
+
+              const candidate = { businessName: bName, nrc, phone, merchantCode: mCode };
+              if (!isValidMerchantRecord(candidate)) continue;
+
+              tabCount++;
+              allRecords.push({
+                id: `gsheet-xlsx-${cleanId.slice(0, 6)}-${sIdx}-${rIdx}-${tabCount}`,
+                sheetName: sName,
+                sr: sr,
+                businessName: bName,
+                date: date,
+                merchantCode: mCode,
+                natureOfBusiness: nature,
+                ownerDirector: owner,
+                nrc: nrc,
+                nrcLast6: extractNrcLast6(nrc),
+                phone: phone,
+                normalizedPhone: normalizePhone(phone),
+                bankAcc: bank,
+                merchantPortalStatus: status,
+              });
+            }
+
+            if (tabCount > 0) {
+              validSheets.push(sName);
+            }
+          }
+        }
+      }
+    }
+  } catch (xlsxErr) {
+    console.warn('Direct XLSX export attempt failed or CORS blocked:', xlsxErr);
+  }
+
+  // If XLSX produced valid records, return immediately!
+  if (allRecords.length > 0) {
+    return {
+      spreadsheetId: cleanId,
+      title: spreadsheetTitle,
+      sheetNames: validSheets.length > 0 ? validSheets : ['Sheet1'],
+      records: allRecords,
+      totalRecords: allRecords.length,
+    };
+  }
+
+  // ==========================================
+  // METHOD 2: Google Visualization API (gviz/tq)
+  // ==========================================
+  onProgress?.('Google Visualization API ဖြင့် စစ်ဆေးဖတ်ရှုနေပါသည်...');
+  let discoveredSheetNames: string[] = [];
+
   try {
     const htmlRes = await fetch(`https://docs.google.com/spreadsheets/d/${cleanId}/htmlview`);
     if (htmlRes.ok) {
       const htmlText = await htmlRes.text();
-
       const titleMatch = htmlText.match(/<title>(.*?)<\/title>/i);
       if (titleMatch && titleMatch[1]) {
-        spreadsheetTitle = titleMatch[1].replace(/- Google Sheets/i, '').trim();
+        const rawT = titleMatch[1].replace(/- Google Sheets/i, '').replace(/- Google Drive/i, '').trim();
+        if (rawT && !rawT.toLowerCase().includes('page not found') && !rawT.toLowerCase().includes('sign in')) {
+          spreadsheetTitle = rawT;
+        }
       }
 
-      // Match sheet buttons: <li id="sheet-button-...">...<a>SheetName</a>...
       const tabRegex = /<li id="sheet-button-[^"]*"[^>]*><a[^>]*>([^<]+)<\/a>/gi;
       let m;
       while ((m = tabRegex.exec(htmlText)) !== null) {
@@ -294,12 +492,6 @@ export async function fetchPublicSpreadsheetData(
     discoveredSheetNames = ['Sheet1'];
   }
 
-  onProgress?.(`Found ${discoveredSheetNames.length} sheet tab(s). Loading rows...`);
-
-  const allRecords: MerchantRecord[] = [];
-  const validSheets: string[] = [];
-
-  // 2. Fetch each tab with gviz/tq
   for (let sIdx = 0; sIdx < discoveredSheetNames.length; sIdx++) {
     const sName = discoveredSheetNames[sIdx];
     try {
@@ -312,16 +504,19 @@ export async function fetchPublicSpreadsheetData(
       if (!res.ok) continue;
 
       const text = await res.text();
+      if (text.toLowerCase().includes('<html') || text.toLowerCase().includes('<!doctype')) {
+        continue; // Discard HTML error responses
+      }
+
       const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\);?$/m);
       if (!match || !match[1]) continue;
 
       const gvizData = JSON.parse(match[1]);
-      if (!gvizData.table) continue;
+      if (gvizData.status !== 'ok' || !gvizData.table) continue;
 
       const cols = gvizData.table.cols || [];
       const rows = gvizData.table.rows || [];
 
-      // Determine headers
       let headerRow: string[] = cols.map((c: { label?: string }) => c?.label || '');
       const hasLabels = headerRow.some((h) => h.trim().length > 0);
 
@@ -370,7 +565,8 @@ export async function fetchPublicSpreadsheetData(
         const date = getVal(colMap.date);
         const status = getVal(colMap.status);
 
-        if (!bName && !nrc && !phone && !mCode) continue;
+        const candidate = { businessName: bName, nrc, phone, merchantCode: mCode };
+        if (!isValidMerchantRecord(candidate)) continue;
 
         count++;
         allRecords.push({
@@ -399,9 +595,11 @@ export async function fetchPublicSpreadsheetData(
     }
   }
 
-  // 3. Fallback: If no records from gviz, try direct CSV export
+  // ==========================================
+  // METHOD 3: Fallback CSV Export
+  // ==========================================
   if (allRecords.length === 0) {
-    onProgress?.('Reading via Google Sheets export format...');
+    onProgress?.('Google Sheets CSV ပုံစံဖြင့် ထပ်မံကြိုးစားနေပါသည်...');
     const csvUrl = specificGid
       ? `https://docs.google.com/spreadsheets/d/${cleanId}/export?format=csv&gid=${specificGid}`
       : `https://docs.google.com/spreadsheets/d/${cleanId}/export?format=csv`;
@@ -410,7 +608,16 @@ export async function fetchPublicSpreadsheetData(
       const csvRes = await fetch(csvUrl);
       if (csvRes.ok) {
         const csvText = await csvRes.text();
-        if (!csvText.includes('<!DOCTYPE html')) {
+        const lower = csvText.toLowerCase();
+        // Strictly verify not an HTML error or Google login page
+        if (
+          !lower.includes('<html') &&
+          !lower.includes('<!doctype') &&
+          !lower.includes('<title>') &&
+          !lower.includes('google drive') &&
+          !lower.includes('page not found') &&
+          !lower.includes('unable to open')
+        ) {
           const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
           if (lines.length >= 2) {
             const rows = lines.map(parseCsvLine);
@@ -436,7 +643,10 @@ export async function fetchPublicSpreadsheetData(
               const nrc = getVal(colMap.nrc);
               const phone = getVal(colMap.phone);
               const mCode = getVal(colMap.merchantCode);
-              if (!bName && !nrc && !phone && !mCode) continue;
+
+              const candidate = { businessName: bName, nrc, phone, merchantCode: mCode };
+              if (!isValidMerchantRecord(candidate)) continue;
+
               cnt++;
               allRecords.push({
                 id: `gsheet-csv-${cleanId.slice(0, 6)}-${i}-${cnt}`,
@@ -466,9 +676,16 @@ export async function fetchPublicSpreadsheetData(
     }
   }
 
+  // If no records found after all attempts, throw comprehensive Burmese troubleshooting guide
   if (allRecords.length === 0) {
     throw new Error(
-      'Could not read data from this Google Sheet. Please make sure the sheet is shared as "Anyone with the link can view", or sign in with your Google account.'
+      'Google Sheet မှ Merchant Data များကို ဖတ်၍ မရနိုင်သေးပါ (သို့မဟုတ် Data မတွေ့ရှိပါ)။\n\n' +
+      'အကြောင်းအရင်းများ -\n' +
+      '၁။ Google Sheet သည် "Restricted" (ပိတ်ထားဆဲ) ဖြစ်နေနိုင်ပါသည်။\n' +
+      '   👉 ဖြေရှင်းနည်း: မိမိ Google Sheet သို့သွားပြီး အပေါ်ညာဘက်ရှိ "Share" (မျှဝေရန်) ခလုတ်ကို နှိပ်ပါ။\n' +
+      '   👉 "General access" တွင် "Restricted" အစား "Anyone with the link" (Viewer / ကြည့်ရှုသူ) သို့ ပြောင်းပါ။\n' +
+      '   👉 ထို့နောက် "Copy link" ပြန်ယူပြီး ဤနေရာတွင် Link ထည့်ကာ "Fetch & Sync" ပြန်လုပ်ပါ။\n\n' +
+      '၂။ သို့မဟုတ် ပိုမိုမြန်ဆန်လွယ်ကူစေရန် "File / Paste Import" ခလုတ်မှတစ်ဆင့် မိမိ Excel (.xlsx) ဖိုင်ကို တိုက်ရိုက် Upload တင်၍ ချက်ချင်း အသုံးပြုနိုင်ပါသည်။'
     );
   }
 
