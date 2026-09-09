@@ -14,15 +14,15 @@ import {
   Building,
   ListFilter,
 } from 'lucide-react';
-import { SearchFilters, SheetMeta } from '../types';
+import { SearchFilters, SheetMeta, LocationMeta } from '../types';
 
 interface SearchControlsProps {
   filters: SearchFilters;
   onChangeFilters: (newFilters: SearchFilters) => void;
   sheets: SheetMeta[];
   natures: string[];
-  townships: string[];
-  wards: string[];
+  townships: LocationMeta[];
+  wards: LocationMeta[];
   totalResults: number;
   totalRecords: number;
 }
@@ -69,9 +69,6 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
       merchantCode: '',
     });
   };
-
-  // Quick sample buttons for user testing
-  const sampleNrcLast6 = ['105885', '025179', '145700', '044074', '110037', '199784'];
 
   return (
     <section id="search-controls-container" className="bg-white rounded-xl shadow-xs border border-gray-200/90 p-4 sm:p-5 transition-all space-y-4">
@@ -144,7 +141,6 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
               className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
             />
           </div>
-          <p className="text-[11px] text-gray-400">Search by shop, merchant, or company name</p>
         </div>
 
         {/* Criteria 2: NRC (Last 6 Digits) */}
@@ -194,21 +190,6 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
               </button>
             )}
           </div>
-
-          {/* Quick chip suggestions */}
-          <div className="flex items-center gap-1 flex-wrap pt-0.5 text-[11px]">
-            <span className="text-gray-400">Samples:</span>
-            {sampleNrcLast6.map((code) => (
-              <button
-                key={code}
-                type="button"
-                onClick={() => update({ nrc: code, nrcLast6Only: true })}
-                className="px-1.5 py-0.5 bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-gray-600 rounded text-[10px] font-mono transition-colors cursor-pointer"
-              >
-                {code}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Criteria 3: MERCHANT MOBILE NUMBER */}
@@ -237,7 +218,6 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
               className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 font-mono"
             />
           </div>
-          <p className="text-[11px] text-gray-400">Search by phone / mobile number (supports 09 prefix)</p>
         </div>
       </div>
 
@@ -264,7 +244,7 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
             <label htmlFor="select-township-filter" className="flex items-center justify-between text-[11px] font-semibold text-gray-700">
               <span className="flex items-center gap-1">
                 <Building className="w-3 h-3 text-emerald-600" />
-                <span>TOWNSHIP (မြို့နယ်)</span>
+                <span>TOWNSHIP</span>
               </span>
               {filters.township && filters.township !== 'ALL' && (
                 <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.2 rounded">
@@ -278,10 +258,10 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
               onChange={(e) => update({ township: e.target.value })}
               className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-200 rounded-md text-gray-900 font-medium focus:outline-hidden focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
             >
-              <option value="ALL">All Townships (မြို့နယ်အားလုံး)</option>
+              <option value="ALL">All Townships ({totalRecords})</option>
               {townships.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+                <option key={t.name} value={t.name}>
+                  {t.name} ({t.count})
                 </option>
               ))}
             </select>
@@ -292,7 +272,7 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
             <label htmlFor="select-ward-filter" className="flex items-center justify-between text-[11px] font-semibold text-gray-700">
               <span className="flex items-center gap-1">
                 <MapPin className="w-3 h-3 text-emerald-600" />
-                <span>WARD (ရပ်ကွက်)</span>
+                <span>WARD</span>
               </span>
               {filters.ward && filters.ward !== 'ALL' && (
                 <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.2 rounded">
@@ -306,10 +286,12 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
               onChange={(e) => update({ ward: e.target.value })}
               className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-200 rounded-md text-gray-900 font-medium focus:outline-hidden focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
             >
-              <option value="ALL">All Wards (ရပ်ကွက်အားလုံး)</option>
+              <option value="ALL">
+                All Wards {wards.length > 0 ? `(${wards.reduce((acc, w) => acc + w.count, 0)})` : ''}
+              </option>
               {wards.map((w) => (
-                <option key={w} value={w}>
-                  {w}
+                <option key={w.name} value={w.name}>
+                  {w.name} ({w.count})
                 </option>
               ))}
             </select>
@@ -320,7 +302,7 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
             <label htmlFor="select-group-by" className="flex items-center justify-between text-[11px] font-semibold text-gray-700">
               <span className="flex items-center gap-1">
                 <ListFilter className="w-3 h-3 text-emerald-700" />
-                <span>GROUP TABLE BY (အုပ်စုခွဲ၍ကြည့်ရန်)</span>
+                <span>GROUP TABLE BY</span>
               </span>
               {filters.groupBy && filters.groupBy !== 'none' && (
                 <span className="text-[10px] text-amber-800 font-bold bg-amber-100 px-1.5 py-0.2 rounded">
@@ -335,9 +317,9 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
               className="w-full px-2.5 py-1.5 text-xs bg-white border border-amber-300 rounded-md text-gray-900 font-semibold focus:outline-hidden focus:ring-1 focus:ring-amber-500 cursor-pointer shadow-2xs"
             >
               <option value="none">No Grouping (Flat Table List)</option>
-              <option value="township">Group by TOWNSHIP (မြို့နယ်အလိုက်ခွဲကြည့်မည်)</option>
-              <option value="ward">Group by WARD (ရပ်ကွက်အလိုက်ခွဲကြည့်မည်)</option>
-              <option value="sheet">Group by SHEET TAB (Sheet အလိုက်ခွဲကြည့်မည်)</option>
+              <option value="township">Group by Township</option>
+              <option value="ward">Group by Ward</option>
+              <option value="sheet">Group by Sheet Tab</option>
             </select>
           </div>
         </div>

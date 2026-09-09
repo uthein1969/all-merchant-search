@@ -41,6 +41,9 @@ interface GoogleSheetsModalProps {
   onUserUpdate: (user: GoogleUser | null, token: string | null) => void;
   existingToken: string | null;
   onOpenImportModal?: () => void;
+  sheetConfig?: import('../types').ConnectedSheetConfig | null;
+  onUpdateSheetConfig?: (config: import('../types').ConnectedSheetConfig | null) => void;
+  onDisconnectSheet?: () => void;
 }
 
 export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
@@ -53,15 +56,35 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
   onUserUpdate,
   existingToken,
   onOpenImportModal,
+  sheetConfig,
+  onUpdateSheetConfig,
+  onDisconnectSheet,
 }) => {
   const [token, setToken] = useState<string | null>(existingToken);
   const [user, setUser] = useState<GoogleUser | null>(currentUser || null);
-  const [sheetUrlOrId, setSheetUrlOrId] = useState<string>(
-    currentConnectedSheetId ? `https://docs.google.com/spreadsheets/d/${currentConnectedSheetId}/edit` : DEFAULT_SPREADSHEET_URL
-  );
+  const [sheetUrlOrId, setSheetUrlOrId] = useState<string>(() => {
+    if (sheetConfig?.sheetUrlOrId) return sheetConfig.sheetUrlOrId;
+    if (currentConnectedSheetId) return `https://docs.google.com/spreadsheets/d/${currentConnectedSheetId}/edit`;
+    return DEFAULT_SPREADSHEET_URL;
+  });
   const [importMode, setImportMode] = useState<'replace' | 'append'>('replace');
   const [showGuide, setShowGuide] = useState(false);
   const feedbackRef = useRef<HTMLDivElement>(null);
+
+  // Auto-sync configuration state
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(sheetConfig?.autoSyncEnabled ?? true);
+  const [syncIntervalSeconds, setSyncIntervalSeconds] = useState<number>(sheetConfig?.syncIntervalSeconds ?? 3600);
+  const [syncOnFocus, setSyncOnFocus] = useState<boolean>(sheetConfig?.syncOnFocus ?? true);
+
+  // Sync state with props
+  useEffect(() => {
+    if (sheetConfig) {
+      if (sheetConfig.sheetUrlOrId) setSheetUrlOrId(sheetConfig.sheetUrlOrId);
+      setAutoSyncEnabled(sheetConfig.autoSyncEnabled);
+      setSyncIntervalSeconds(sheetConfig.syncIntervalSeconds);
+      setSyncOnFocus(sheetConfig.syncOnFocus);
+    }
+  }, [sheetConfig]);
 
   // Loading & error states
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -174,8 +197,22 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
         id: result.spreadsheetId,
       });
 
+      // Save persistent configuration so the user never has to reconnect again
+      if (onUpdateSheetConfig) {
+        onUpdateSheetConfig({
+          sheetUrlOrId: sheetUrlOrId.trim(),
+          sheetId: result.spreadsheetId,
+          title: result.title,
+          autoSyncEnabled,
+          syncIntervalSeconds,
+          syncOnFocus,
+          lastSyncedAt: Date.now(),
+          lastRecordCount: result.totalRecords,
+        });
+      }
+
       setSuccessMsg(
-        `Successfully synced ${result.totalRecords} records across ${result.sheetNames.length} sheet tab(s) from "${result.title}".`
+        `Successfully synced ${result.totalRecords} records across ${result.sheetNames.length} sheet tab(s) from "${result.title}". Link has been permanently saved for auto-sync.`
       );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to fetch Google Sheet data.';
@@ -394,6 +431,115 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
                 Open in Google Sheets <ExternalLink className="w-2.5 h-2.5" />
               </a>
             </p>
+          </div>
+
+          {/* Auto-Sync Configuration Section */}
+          <div className="bg-emerald-50/60 rounded-xl p-4 border border-emerald-200/90 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-emerald-700 shrink-0" />
+                <div>
+                  <h3 className="text-xs font-bold text-emerald-950">
+                    Auto-Sync Settings (အလိုအလျောက် Sync စနစ်)
+                  </h3>
+                  <p className="text-[11px] text-emerald-700">
+                    Google Sheet အချက်အလက်များ ပြောင်းလဲပါက အလိုအလျောက် Update လုပ်ပေးမည်
+                  </p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoSyncEnabled}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    setAutoSyncEnabled(enabled);
+                    if (sheetConfig && onUpdateSheetConfig) {
+                      onUpdateSheetConfig({ ...sheetConfig, autoSyncEnabled: enabled });
+                    }
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                <span className="ml-2 text-xs font-semibold text-emerald-900">
+                  {autoSyncEnabled ? 'ဖွင့်ထားသည်' : 'ပိတ်ထားသည်'}
+                </span>
+              </label>
+            </div>
+
+            {autoSyncEnabled && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-emerald-200/60">
+                {/* Interval Frequency */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-emerald-900 block">
+                    Sync အကြိမ်ရေ (Interval)
+                  </label>
+                  <select
+                    value={syncIntervalSeconds}
+                    onChange={(e) => {
+                      const sec = Number(e.target.value);
+                      setSyncIntervalSeconds(sec);
+                      if (sheetConfig && onUpdateSheetConfig) {
+                        onUpdateSheetConfig({ ...sheetConfig, syncIntervalSeconds: sec });
+                      }
+                    }}
+                    className="w-full text-xs bg-white border border-emerald-300 rounded-lg px-2.5 py-1.5 text-slate-800 focus:ring-1 focus:ring-emerald-500 focus:outline-none font-medium"
+                  >
+                    <option value={3600}>၁ နာရီတစ်ကြိမ် (1 Hour - ပုံမှန်အကြံပြု)</option>
+                    <option value={7200}>၂ နာရီတစ်ကြိမ် (2 Hours)</option>
+                    <option value={1800}>မိနစ် ၃၀ တစ်ကြိမ် (30 Minutes)</option>
+                    <option value={900}>၁၅ မိနစ်တစ်ကြိမ် (15 Minutes)</option>
+                    <option value={300}>၅ မိနစ်တစ်ကြိမ် (5 Minutes)</option>
+                    <option value={60}>၁ မိနစ်တစ်ကြိမ် (1 Minute)</option>
+                    <option value={30}>စက္ကန့် ၃၀ တစ်ကြိမ် (30 Seconds)</option>
+                  </select>
+                </div>
+
+                {/* Tab Focus Sync */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-emerald-900 block">
+                    Tab Focus Sync
+                  </label>
+                  <label className="flex items-center gap-2 p-1.5 bg-white rounded-lg border border-emerald-300 cursor-pointer text-[11px] text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={syncOnFocus}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setSyncOnFocus(val);
+                        if (sheetConfig && onUpdateSheetConfig) {
+                          onUpdateSheetConfig({ ...sheetConfig, syncOnFocus: val });
+                        }
+                      }}
+                      className="rounded text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>Tab သို့ ပြန်ရောက်တိုင်း Sync မည်</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Persistent Link Saved Notice */}
+            <div className="flex items-center justify-between text-[11px] text-emerald-800 bg-white/80 p-2 rounded-lg border border-emerald-200">
+              <span className="flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Link ကို Browser တွင် အမြဲသိမ်းဆည်းထားပြီး App ဖွင့်တိုင်း ထပ်ချိတ်စရာမလိုပါ။</span>
+              </span>
+              {sheetConfig && onDisconnectSheet && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('သိမ်းဆည်းထားသော Google Sheet Link ကို ဖြုတ်မည်မှာ သေချာပါသလား?')) {
+                      onDisconnectSheet();
+                      setSuccessMsg('Saved Google Sheet Link disconnected.');
+                    }
+                  }}
+                  className="text-red-600 hover:text-red-700 font-medium hover:underline text-[11px] cursor-pointer ml-2 shrink-0"
+                >
+                  လင့်ခ်ဖျက်မည်
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Quick Select from Drive files */}

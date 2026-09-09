@@ -36,7 +36,7 @@ export interface SearchFilters {
   merchantCode: string;
   township: string;
   ward: string;
-  groupBy: 'none' | 'township' | 'ward';
+  groupBy: 'none' | 'township' | 'ward' | 'sheet';
 }
 
 export interface SheetMeta {
@@ -47,4 +47,18 @@ export interface SheetMeta {
 export interface LocationMeta {
   name: string;
   count: number;
+}
+
+export type SyncState = 'idle' | 'syncing' | 'success' | 'error';
+
+export interface ConnectedSheetConfig {
+  sheetUrlOrId: string;
+  sheetId: string;
+  title: string;
+  autoSyncEnabled: boolean;
+  syncIntervalSeconds: number; // e.g. 60
+  syncOnFocus: boolean;
+  lastSyncedAt?: number;
+  lastRecordCount?: number;
+  lastErrorMessage?: string;
 }

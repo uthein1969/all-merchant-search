@@ -1,7 +1,14 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { initialMerchants } from './data/initialMerchants';
-import { MerchantRecord, SearchFilters, SheetMeta } from './types';
-import { filterMerchants } from './utils/searchHelper';
+import {
+  MerchantRecord,
+  SearchFilters,
+  SheetMeta,
+  LocationMeta,
+  ConnectedSheetConfig,
+  SyncState,
+} from './types';
+import { filterMerchants, areMerchantRecordsEqual } from './utils/searchHelper';
 import { exportToCSV } from './utils/sheetParser';
 import { Navbar } from './components/Navbar';
 import { SearchControls } from './components/SearchControls';
@@ -10,11 +17,17 @@ import { MerchantTable } from './components/MerchantTable';
 import { MerchantDetailModal } from './components/MerchantDetailModal';
 import { ImportModal } from './components/ImportModal';
 import { GoogleSheetsModal } from './components/GoogleSheetsModal';
-import { GoogleUser } from './services/googleSheetsService';
+import {
+  GoogleUser,
+  fetchGoogleSpreadsheetData,
+  extractSpreadsheetId,
+  DEFAULT_SPREADSHEET_URL,
+} from './services/googleSheetsService';
 import { CheckCircle2 } from 'lucide-react';
 
 const STORAGE_KEY = 'merchant_kyc_data_v2';
 const SHEET_META_KEY = 'connected_sheet_meta_v1';
+const SHEET_CONFIG_KEY = 'merchant_connected_sheet_config_v2';
 
 export default function App() {
   // 1. Merchant Data State (persisted in localStorage)
@@ -42,16 +55,68 @@ export default function App() {
     }
   }, [merchants]);
 
-  // Connected Google Sheet Metadata
-  const [connectedSheetMeta, setConnectedSheetMeta] = useState<{ id: string; title: string } | null>(() => {
+  // Persistent Google Sheet Configuration (so the user never has to reconnect again)
+  const [sheetConfig, setSheetConfig] = useState<ConnectedSheetConfig | null>(() => {
     try {
-      const saved = localStorage.getItem(SHEET_META_KEY);
-      if (saved) return JSON.parse(saved);
+      const saved = localStorage.getItem(SHEET_CONFIG_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Ensure 1 hour interval (3600s) default per user request
+        if (!parsed.syncIntervalSeconds || parsed.syncIntervalSeconds === 60) {
+          parsed.syncIntervalSeconds = 3600;
+        }
+        return parsed;
+      }
+
+      const oldMeta = localStorage.getItem(SHEET_META_KEY);
+      if (oldMeta) {
+        const parsed = JSON.parse(oldMeta);
+        return {
+          sheetUrlOrId: `https://docs.google.com/spreadsheets/d/${parsed.id}/edit`,
+          sheetId: parsed.id,
+          title: parsed.title || 'All Merchant KYC',
+          autoSyncEnabled: true,
+          syncIntervalSeconds: 3600,
+          syncOnFocus: true,
+          lastSyncedAt: Date.now(),
+        };
+      }
+
+      // Default persistent connection to All Merchant KYC
+      return {
+        sheetUrlOrId: DEFAULT_SPREADSHEET_URL,
+        sheetId: extractSpreadsheetId(DEFAULT_SPREADSHEET_URL),
+        title: 'All Merchant KYC',
+        autoSyncEnabled: true,
+        syncIntervalSeconds: 3600,
+        syncOnFocus: true,
+      };
+    } catch {
+      return null;
+    }
+  });
+
+  // Sync state: idle | syncing | success | error
+  const [syncState, setSyncState] = useState<SyncState>('idle');
+  const isSyncingRef = useRef(false);
+
+  // Save sheetConfig to localStorage
+  useEffect(() => {
+    try {
+      if (sheetConfig) {
+        localStorage.setItem(SHEET_CONFIG_KEY, JSON.stringify(sheetConfig));
+        localStorage.setItem(
+          SHEET_META_KEY,
+          JSON.stringify({ id: sheetConfig.sheetId, title: sheetConfig.title })
+        );
+      } else {
+        localStorage.removeItem(SHEET_CONFIG_KEY);
+        localStorage.removeItem(SHEET_META_KEY);
+      }
     } catch {
       // ignore
     }
-    return null;
-  });
+  }, [sheetConfig]);
 
   // Google OAuth User and Token
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null);
@@ -78,10 +143,109 @@ export default function App() {
   const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
-  };
+  }, []);
+
+  // Sync Engine: Silent background fetch and smart diff
+  const performSync = useCallback(
+    async (isSilent = false) => {
+      if (!sheetConfig || !sheetConfig.sheetUrlOrId || isSyncingRef.current) return;
+      isSyncingRef.current = true;
+      setSyncState('syncing');
+
+      try {
+        const cleanId = extractSpreadsheetId(sheetConfig.sheetUrlOrId);
+        const result = await fetchGoogleSpreadsheetData(
+          cleanId,
+          googleToken,
+          () => {}, // silent progress
+          sheetConfig.sheetUrlOrId
+        );
+
+        if (result.records && result.records.length > 0) {
+          setMerchants((prev) => {
+            const hasChanged = !areMerchantRecordsEqual(prev, result.records);
+            if (hasChanged) {
+              showToast(
+                `Google Sheet အသစ် ပြောင်းလဲမှုများကို Auto Sync လုပ်ဆောင်ပြီးပါပြီ (${result.totalRecords} records).`
+              );
+              return result.records;
+            } else {
+              if (!isSilent) {
+                showToast(`Google Sheet အချက်အလက်များ နောက်ဆုံးအတိုင်း ဖြစ်နေပါသည် (${result.totalRecords} records).`);
+              }
+              return prev;
+            }
+          });
+
+          setSheetConfig((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  title: result.title || prev.title,
+                  lastSyncedAt: Date.now(),
+                  lastRecordCount: result.totalRecords,
+                  lastErrorMessage: undefined,
+                }
+              : null
+          );
+          setSyncState('success');
+        }
+      } catch (err) {
+        console.warn('Auto sync check failed:', err);
+        setSyncState('error');
+        if (!isSilent) {
+          showToast('Google Sheet sync မအောင်မြင်ပါ (လင့်ခ်ကို စစ်ဆေးပေးပါ)။');
+        }
+      } finally {
+        isSyncingRef.current = false;
+        setTimeout(() => {
+          setSyncState('idle');
+        }, 2000);
+      }
+    },
+    [sheetConfig, googleToken, showToast]
+  );
+
+  // 1. Auto-sync on startup
+  useEffect(() => {
+    if (sheetConfig && sheetConfig.autoSyncEnabled) {
+      const timer = setTimeout(() => {
+        performSync(true);
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 2. Periodic background auto-sync timer
+  useEffect(() => {
+    if (!sheetConfig || !sheetConfig.autoSyncEnabled) return;
+    const intervalSec = Math.max(15, sheetConfig.syncIntervalSeconds || 60);
+    const intervalId = setInterval(() => {
+      performSync(true);
+    }, intervalSec * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [sheetConfig?.autoSyncEnabled, sheetConfig?.syncIntervalSeconds, performSync]);
+
+  // 3. Tab focus auto-sync: when user switches back from Google Sheet tab
+  useEffect(() => {
+    if (!sheetConfig || !sheetConfig.autoSyncEnabled || !sheetConfig.syncOnFocus) return;
+
+    let lastFocusSync = 0;
+    const handleFocus = () => {
+      const now = Date.now();
+      if (now - lastFocusSync > 15000) {
+        lastFocusSync = now;
+        performSync(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [sheetConfig?.autoSyncEnabled, sheetConfig?.syncOnFocus, performSync]);
 
   // 4. Compute unique sheet names and counts
   const sheetsMeta = useMemo<SheetMeta[]>(() => {
@@ -102,28 +266,37 @@ export default function App() {
     return Array.from(set).sort();
   }, [merchants]);
 
-  // Compute unique townships
-  const townships = useMemo<string[]>(() => {
-    const set = new Set<string>();
+  // Compute unique townships with counts
+  const townships = useMemo<LocationMeta[]>(() => {
+    const map = new Map<string, number>();
     merchants.forEach((m) => {
-      if (m.township?.trim()) set.add(m.township.trim());
+      const t = m.township?.trim();
+      if (t) {
+        map.set(t, (map.get(t) || 0) + 1);
+      }
     });
-    return Array.from(set).sort();
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [merchants]);
 
-  // Compute unique wards (optionally filtered by currently selected township)
-  const wards = useMemo<string[]>(() => {
-    const set = new Set<string>();
+  // Compute unique wards with counts (optionally filtered by currently selected township)
+  const wards = useMemo<LocationMeta[]>(() => {
+    const map = new Map<string, number>();
     merchants.forEach((m) => {
       if (filters.township && filters.township !== 'ALL') {
         if (m.township?.trim().toLowerCase() === filters.township.trim().toLowerCase()) {
-          if (m.ward?.trim()) set.add(m.ward.trim());
+          const w = m.ward?.trim();
+          if (w) map.set(w, (map.get(w) || 0) + 1);
         }
       } else {
-        if (m.ward?.trim()) set.add(m.ward.trim());
+        const w = m.ward?.trim();
+        if (w) map.set(w, (map.get(w) || 0) + 1);
       }
     });
-    return Array.from(set).sort();
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [merchants, filters.township]);
 
   // 6. Filter merchants based on current criteria
@@ -135,11 +308,19 @@ export default function App() {
   const handleResetData = () => {
     if (window.confirm('Reset to default sample merchant records?')) {
       setMerchants(initialMerchants);
-      setConnectedSheetMeta(null);
+      setSheetConfig(null);
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(SHEET_META_KEY);
+      localStorage.removeItem(SHEET_CONFIG_KEY);
       showToast('Merchant data restored to default records.');
     }
+  };
+
+  const handleDisconnectSheet = () => {
+    setSheetConfig(null);
+    localStorage.removeItem(SHEET_CONFIG_KEY);
+    localStorage.removeItem(SHEET_META_KEY);
+    showToast('Google Sheet link has been disconnected.');
   };
 
   const handleExport = () => {
@@ -172,12 +353,16 @@ export default function App() {
     } else {
       setMerchants((prev) => [...prev, ...newRecords]);
     }
-    setConnectedSheetMeta(meta);
-    try {
-      localStorage.setItem(SHEET_META_KEY, JSON.stringify(meta));
-    } catch {
-      // ignore
-    }
+    setSheetConfig((prev) => ({
+      sheetUrlOrId: prev?.sheetUrlOrId || `https://docs.google.com/spreadsheets/d/${meta.id}/edit`,
+      sheetId: meta.id,
+      title: meta.title,
+      autoSyncEnabled: prev?.autoSyncEnabled ?? true,
+      syncIntervalSeconds: prev?.syncIntervalSeconds ?? 3600,
+      syncOnFocus: prev?.syncOnFocus ?? true,
+      lastSyncedAt: Date.now(),
+      lastRecordCount: newRecords.length,
+    }));
     showToast(`Synced ${newRecords.length} records from Google Sheet "${meta.title}".`);
   };
 
@@ -191,9 +376,12 @@ export default function App() {
         onOpenGoogleSheets={() => setIsGoogleModalOpen(true)}
         onExport={handleExport}
         onResetData={handleResetData}
-        connectedSheetTitle={connectedSheetMeta?.title}
+        connectedSheetTitle={sheetConfig?.title}
         currentUser={googleUser}
-        isGoogleConnected={!!googleToken || !!connectedSheetMeta}
+        isGoogleConnected={!!googleToken || !!sheetConfig}
+        sheetConfig={sheetConfig}
+        syncState={syncState}
+        onTriggerSync={() => performSync(false)}
       />
 
       {/* Main Content Area */}
@@ -246,7 +434,7 @@ export default function App() {
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 py-4 px-6 text-center text-xs text-gray-500">
         <p>
-          All Merchant KYC Search Application • Direct Google Sheets Sync with Business Name, NRC (Last 6 Digits) & Phone Search
+          All Merchant KYC Search Application • Direct Google Sheets Auto-Sync with Business Name, NRC (Last 6 Digits) & Phone Search
         </p>
       </footer>
 
@@ -271,11 +459,14 @@ export default function App() {
         isOpen={isGoogleModalOpen}
         onClose={() => setIsGoogleModalOpen(false)}
         onDataSynced={handleSyncGoogleData}
-        currentConnectedSheetId={connectedSheetMeta?.id}
-        currentConnectedSheetTitle={connectedSheetMeta?.title}
+        currentConnectedSheetId={sheetConfig?.sheetId}
+        currentConnectedSheetTitle={sheetConfig?.title}
         currentUser={googleUser}
         existingToken={googleToken}
         onOpenImportModal={() => setIsImportOpen(true)}
+        sheetConfig={sheetConfig}
+        onUpdateSheetConfig={setSheetConfig}
+        onDisconnectSheet={handleDisconnectSheet}
         onUserUpdate={(user, token) => {
           setGoogleUser(user);
           setGoogleToken(token);

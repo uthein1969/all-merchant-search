@@ -194,3 +194,47 @@ export function formatNrcParts(nrc: string): { prefix: string; last6: string } {
   }
   return { prefix: nrc, last6: '' };
 }
+
+/**
+ * Fast comparison to check if merchant records changed between syncs
+ */
+export function areMerchantRecordsEqual(a: MerchantRecord[], b: MerchantRecord[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  if (a.length === 0) return true;
+
+  // Fast check boundaries
+  const checks = [0, Math.floor(a.length / 2), a.length - 1];
+  for (const idx of checks) {
+    if (
+      a[idx].id !== b[idx].id ||
+      a[idx].businessName !== b[idx].businessName ||
+      a[idx].nrc !== b[idx].nrc ||
+      a[idx].phone !== b[idx].phone
+    ) {
+      return false;
+    }
+  }
+
+  // Full compare
+  for (let i = 0; i < a.length; i++) {
+    const itemA = a[i];
+    const itemB = b[i];
+    if (
+      itemA.businessName !== itemB.businessName ||
+      itemA.nrc !== itemB.nrc ||
+      itemA.phone !== itemB.phone ||
+      itemA.township !== itemB.township ||
+      itemA.ward !== itemB.ward ||
+      itemA.openDate !== itemB.openDate ||
+      itemA.date !== itemB.date ||
+      itemA.bankAcc !== itemB.bankAcc ||
+      itemA.legalPersonalName !== itemB.legalPersonalName ||
+      itemA.fatherName !== itemB.fatherName ||
+      itemA.sheetName !== itemB.sheetName
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
