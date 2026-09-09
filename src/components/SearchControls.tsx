@@ -1,5 +1,19 @@
 import React from 'react';
-import { Search, X, Store, CreditCard, Phone, Layers, Tag, HelpCircle, CheckSquare, Square } from 'lucide-react';
+import {
+  Search,
+  X,
+  Store,
+  CreditCard,
+  Phone,
+  Layers,
+  Tag,
+  HelpCircle,
+  CheckSquare,
+  Square,
+  MapPin,
+  Building,
+  ListFilter,
+} from 'lucide-react';
 import { SearchFilters, SheetMeta } from '../types';
 
 interface SearchControlsProps {
@@ -7,6 +21,8 @@ interface SearchControlsProps {
   onChangeFilters: (newFilters: SearchFilters) => void;
   sheets: SheetMeta[];
   natures: string[];
+  townships: string[];
+  wards: string[];
   totalResults: number;
   totalRecords: number;
 }
@@ -16,6 +32,8 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
   onChangeFilters,
   sheets,
   natures,
+  townships,
+  wards,
   totalResults,
   totalRecords,
 }) => {
@@ -29,6 +47,9 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
     filters.nrc ||
     filters.phone ||
     (filters.sheetName && filters.sheetName !== 'ALL') ||
+    (filters.township && filters.township !== 'ALL') ||
+    (filters.ward && filters.ward !== 'ALL') ||
+    (filters.groupBy && filters.groupBy !== 'none') ||
     filters.natureOfBusiness ||
     filters.merchantCode
   );
@@ -41,6 +62,9 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
       nrcLast6Only: true, // Default to true as user specifically requested NRC နောက် ၆ လုံး
       phone: '',
       sheetName: 'ALL',
+      township: 'ALL',
+      ward: 'ALL',
+      groupBy: 'none',
       natureOfBusiness: '',
       merchantCode: '',
     });
@@ -50,9 +74,9 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
   const sampleNrcLast6 = ['105885', '025179', '145700', '044074', '110037', '199784'];
 
   return (
-    <section id="search-controls-container" className="bg-white rounded-xl shadow-xs border border-gray-200/90 p-4 sm:p-5 transition-all">
+    <section id="search-controls-container" className="bg-white rounded-xl shadow-xs border border-gray-200/90 p-4 sm:p-5 transition-all space-y-4">
       {/* Top Bar: General Instant Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pb-4 border-b border-gray-100">
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pb-3 border-b border-gray-100">
         <div className="relative flex-1">
           <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
@@ -60,7 +84,7 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
             type="text"
             value={filters.globalQuery}
             onChange={(e) => update({ globalQuery: e.target.value })}
-            placeholder="Quick search across all fields (Business Name, NRC, Merchant Mobile Number, Code)..."
+            placeholder="Quick search across all fields (Business Name, NRC, Mobile, Legal Name, Township, Ward)..."
             className="w-full pl-10.5 pr-9 py-2.5 bg-gray-50/80 hover:bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-400 text-sm rounded-lg border border-gray-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
           />
           {filters.globalQuery && (
@@ -93,13 +117,13 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
       </div>
 
       {/* Main Targeted Criteria Grid: BUSINESS NAME, NRC (Last 6 Digits), PH */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
         {/* Criteria 1: BUSINESS NAME */}
         <div className="space-y-1.5">
           <label htmlFor="input-business-name" className="flex items-center justify-between text-xs font-semibold text-gray-700">
             <span className="flex items-center gap-1.5">
               <Store className="w-3.5 h-3.5 text-emerald-600" />
-              <span>BUSINESS NAME</span>
+              <span>MERCHANT BUSINESS NAME</span>
             </span>
             {filters.businessName && (
               <button
@@ -120,7 +144,7 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
               className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
             />
           </div>
-          <p className="text-[11px] text-gray-400">Search by merchant, store, or branch name</p>
+          <p className="text-[11px] text-gray-400">Search by shop, merchant, or company name</p>
         </div>
 
         {/* Criteria 2: NRC (Last 6 Digits) */}
@@ -128,7 +152,7 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
           <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
             <label htmlFor="input-nrc" className="flex items-center gap-1.5">
               <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
-              <span>NRC NUMBER</span>
+              <span>NRC / PASSPORT NO</span>
             </label>
 
             {/* Toggle: NRC Last 6 Digits Only */}
@@ -213,12 +237,114 @@ export const SearchControls: React.FC<SearchControlsProps> = ({
               className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 font-mono"
             />
           </div>
-          <p className="text-[11px] text-gray-400">Search by merchant mobile or phone (supports 09 prefix)</p>
+          <p className="text-[11px] text-gray-400">Search by phone / mobile number (supports 09 prefix)</p>
+        </div>
+      </div>
+
+      {/* Location Filter & Grouping Section: TOWNSHIP, WARD, and GROUP BY DROPDOWNS */}
+      <div className="bg-emerald-50/50 border border-emerald-100 rounded-lg p-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
+            <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+            <span>WARD & TOWNSHIP DROPDOWN FILTERS & GROUPING</span>
+          </div>
+          {(filters.township && filters.township !== 'ALL' || filters.ward && filters.ward !== 'ALL') && (
+            <button
+              onClick={() => update({ township: 'ALL', ward: 'ALL' })}
+              className="text-[11px] text-emerald-700 hover:text-emerald-900 hover:underline cursor-pointer"
+            >
+              Reset Location Filters
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* TOWNSHIP Dropdown */}
+          <div className="space-y-1">
+            <label htmlFor="select-township-filter" className="flex items-center justify-between text-[11px] font-semibold text-gray-700">
+              <span className="flex items-center gap-1">
+                <Building className="w-3 h-3 text-emerald-600" />
+                <span>TOWNSHIP (မြို့နယ်)</span>
+              </span>
+              {filters.township && filters.township !== 'ALL' && (
+                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.2 rounded">
+                  Selected
+                </span>
+              )}
+            </label>
+            <select
+              id="select-township-filter"
+              value={filters.township || 'ALL'}
+              onChange={(e) => update({ township: e.target.value })}
+              className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-200 rounded-md text-gray-900 font-medium focus:outline-hidden focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">All Townships (မြို့နယ်အားလုံး)</option>
+              {townships.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* WARD Dropdown */}
+          <div className="space-y-1">
+            <label htmlFor="select-ward-filter" className="flex items-center justify-between text-[11px] font-semibold text-gray-700">
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-emerald-600" />
+                <span>WARD (ရပ်ကွက်)</span>
+              </span>
+              {filters.ward && filters.ward !== 'ALL' && (
+                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.2 rounded">
+                  Selected
+                </span>
+              )}
+            </label>
+            <select
+              id="select-ward-filter"
+              value={filters.ward || 'ALL'}
+              onChange={(e) => update({ ward: e.target.value })}
+              className="w-full px-2.5 py-1.5 text-xs bg-white border border-emerald-200 rounded-md text-gray-900 font-medium focus:outline-hidden focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">All Wards (ရပ်ကွက်အားလုံး)</option>
+              {wards.map((w) => (
+                <option key={w} value={w}>
+                  {w}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* GROUP BY Dropdown List */}
+          <div className="space-y-1">
+            <label htmlFor="select-group-by" className="flex items-center justify-between text-[11px] font-semibold text-gray-700">
+              <span className="flex items-center gap-1">
+                <ListFilter className="w-3 h-3 text-emerald-700" />
+                <span>GROUP TABLE BY (အုပ်စုခွဲ၍ကြည့်ရန်)</span>
+              </span>
+              {filters.groupBy && filters.groupBy !== 'none' && (
+                <span className="text-[10px] text-amber-800 font-bold bg-amber-100 px-1.5 py-0.2 rounded">
+                  Grouped
+                </span>
+              )}
+            </label>
+            <select
+              id="select-group-by"
+              value={filters.groupBy || 'none'}
+              onChange={(e) => update({ groupBy: e.target.value as 'none' | 'township' | 'ward' | 'sheet' })}
+              className="w-full px-2.5 py-1.5 text-xs bg-white border border-amber-300 rounded-md text-gray-900 font-semibold focus:outline-hidden focus:ring-1 focus:ring-amber-500 cursor-pointer shadow-2xs"
+            >
+              <option value="none">No Grouping (Flat Table List)</option>
+              <option value="township">Group by TOWNSHIP (မြို့နယ်အလိုက်ခွဲကြည့်မည်)</option>
+              <option value="ward">Group by WARD (ရပ်ကွက်အလိုက်ခွဲကြည့်မည်)</option>
+              <option value="sheet">Group by SHEET TAB (Sheet အလိုက်ခွဲကြည့်မည်)</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {/* Secondary Row: Multi-Sheet Selector, Business Nature, Merchant Code */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 mt-3 border-t border-gray-100">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-100">
         {/* Sheet Selector */}
         <div className="space-y-1">
           <label htmlFor="select-sheet-filter" className="flex items-center gap-1 text-[11px] font-semibold text-gray-600">

@@ -189,14 +189,23 @@ export async function listGoogleDriveSpreadsheets(accessToken: string): Promise<
  */
 interface ColumnIndexMap {
   sr: number;
+  openDate: number;
   businessName: number;
-  date: number;
-  merchantCode: number;
-  natureOfBusiness: number;
+  phone: number;
+  legalPersonalName: number;
   ownerDirector: number;
   nrc: number;
-  phone: number;
+  fatherName: number;
+  dateOfBirth: number;
+  gender: number;
   bankAcc: number;
+  businessLicenseTypes: number;
+  natureOfBusiness: number;
+  detailAddress: number;
+  ward: number;
+  township: number;
+  date: number;
+  merchantCode: number;
   status: number;
 }
 
@@ -215,7 +224,9 @@ function matchHeaderIndex(headers: string[], patterns: string[]): number {
 function detectColumnIndices(headerRow: string[]): ColumnIndexMap {
   return {
     sr: matchHeaderIndex(headerRow, ['sr', 'srno', 'no', 'serial', 'စဉ်', 'စဥ်']),
+    openDate: matchHeaderIndex(headerRow, ['opendate', 'date', 'regdate', 'createddate', 'entrydate', 'ဖွင့်လှစ်သည့်ရက်', 'ရက်စွဲ']),
     businessName: matchHeaderIndex(headerRow, [
+      'merchantbusinessname',
       'businessname',
       'business',
       'shopname',
@@ -227,21 +238,105 @@ function detectColumnIndices(headerRow: string[]): ColumnIndexMap {
       'လုပ်ငန်းအမည်',
       'အမည်',
     ]),
-    date: matchHeaderIndex(headerRow, ['date', 'regdate', 'createddate', 'entrydate', 'ရက်စွဲ']),
-    merchantCode: matchHeaderIndex(headerRow, ['merchantcode', 'code', 'mid', 'merchantid', 'id', 'ကုဒ်']),
+    phone: matchHeaderIndex(headerRow, [
+      'merchantmobilenumber',
+      'mobilenumber',
+      'ph',
+      'phone',
+      'phonenumber',
+      'tel',
+      'mobile',
+      'contact',
+      'ဖုန်း',
+      'မိုဘိုင်းဖုန်း',
+      'ဖုန်းနံပါတ်',
+    ]),
+    legalPersonalName: matchHeaderIndex(headerRow, [
+      'legalpersonalname',
+      'personalname',
+      'legalname',
+      'ownerdirector',
+      'owner',
+      'director',
+      'proprietor',
+      'fullname',
+      'ပိုင်ရှင်အမည်',
+      'အမည်',
+      'ဒါရိုက်တာ',
+      'တရားဝင်အမည်',
+    ]),
+    ownerDirector: matchHeaderIndex(headerRow, [
+      'ownerdirector',
+      'owner',
+      'director',
+      'proprietor',
+      'legalpersonalname',
+      'ပိုင်ရှင်',
+      'ဒါရိုက်တာ',
+    ]),
+    nrc: matchHeaderIndex(headerRow, [
+      'nrcpassportno',
+      'nrcpassport',
+      'nrc',
+      'passport',
+      'passportno',
+      'nationalid',
+      'nrcno',
+      'idcard',
+      'nrcnumber',
+      'မှတ်ပုံတင်',
+      'မှတ်ပုံတင်အမှတ်',
+    ]),
+    fatherName: matchHeaderIndex(headerRow, ['fathername', 'father', 'fathersname', 'dadsname', 'အဘအမည်', 'ဖခင်အမည်', 'အဖအမည်']),
+    dateOfBirth: matchHeaderIndex(headerRow, ['dateofbirth', 'dob', 'birthdate', 'birthday', 'မွေးသက္ကရာဇ်', 'မွေးနေ့']),
+    gender: matchHeaderIndex(headerRow, ['gender', 'sex', 'ကျား/မ', 'လိင်']),
+    bankAcc: matchHeaderIndex(headerRow, [
+      'bankaccno',
+      'bankacc',
+      'bankaccount',
+      'accno',
+      'accountno',
+      'bank',
+      'ဘဏ်စာရင်း',
+      'ဘဏ်အကောင့်နံပါတ်',
+      'အကောင့်',
+    ]),
+    businessLicenseTypes: matchHeaderIndex(headerRow, [
+      'businesslicensetypes',
+      'businesslicensetype',
+      'licensetypes',
+      'licensetype',
+      'license',
+      'businesslicense',
+      'လိုင်စင်အမျိုးအစား',
+      'လုပ်ငန်းလိုင်စင်',
+    ]),
     natureOfBusiness: matchHeaderIndex(headerRow, [
       'natureofbusiness',
       'nature',
       'businesstype',
       'category',
       'type',
+      'lineofbusiness',
       'လုပ်ငန်းအမျိုးအစား',
       'အမျိုးအစား',
     ]),
-    ownerDirector: matchHeaderIndex(headerRow, ['ownerdirector', 'owner', 'director', 'proprietor', 'ပိုင်ရှင်', 'ဒါရိုက်တာ']),
-    nrc: matchHeaderIndex(headerRow, ['nrc', 'nationalid', 'nrcno', 'idcard', 'nrcnumber', 'မှတ်ပုံတင်', 'မှတ်ပုံတင်အမှတ်']),
-    phone: matchHeaderIndex(headerRow, ['ph', 'phone', 'phonenumber', 'tel', 'mobile', 'contact', 'ဖုန်း', 'ဖုန်းနံပါတ်']),
-    bankAcc: matchHeaderIndex(headerRow, ['bankacc', 'bankaccount', 'accno', 'accountno', 'bank', 'ဘဏ်စာရင်း', 'အကောင့်']),
+    detailAddress: matchHeaderIndex(headerRow, [
+      'businesscompanydetailaddress',
+      'companydetailaddress',
+      'businessaddress',
+      'detailaddress',
+      'address',
+      'companyaddress',
+      'streetaddress',
+      'လိပ်စာ',
+      'ဆိုင်လိပ်စာ',
+      'ကုမ္ပဏီလိပ်စာ',
+    ]),
+    ward: matchHeaderIndex(headerRow, ['ward', 'wardname', 'quarter', 'ရပ်ကွက်', 'ရပ်ကွက်အမည်']),
+    township: matchHeaderIndex(headerRow, ['township', 'townshipname', 'tsp', 'city', 'town', 'မြို့နယ်', 'မြို့နယ်အမည်']),
+    date: matchHeaderIndex(headerRow, ['opendate', 'date', 'regdate', 'createddate', 'entrydate', 'ရက်စွဲ']),
+    merchantCode: matchHeaderIndex(headerRow, ['merchantcode', 'code', 'mid', 'merchantid', 'id', 'ကုဒ်']),
     status: matchHeaderIndex(headerRow, ['status', 'merchantportal', 'merchantportalstatus', 'remark', 'portalstatus', 'အခြေအနေ']),
   };
 }
@@ -408,10 +503,19 @@ export async function fetchPublicSpreadsheetData(
               const phone = getVal(colMap.phone);
               const mCode = getVal(colMap.merchantCode);
               const nature = getVal(colMap.natureOfBusiness);
-              const owner = getVal(colMap.ownerDirector);
+              const legalName = getVal(colMap.legalPersonalName);
+              const owner = getVal(colMap.ownerDirector) || legalName;
+              const father = getVal(colMap.fatherName);
+              const dob = getVal(colMap.dateOfBirth);
+              const gender = getVal(colMap.gender);
               const bank = getVal(colMap.bankAcc);
+              const license = getVal(colMap.businessLicenseTypes);
+              const address = getVal(colMap.detailAddress);
+              const ward = getVal(colMap.ward);
+              const township = getVal(colMap.township);
               const sr = getVal(colMap.sr) || tabCount + 1;
-              const date = getVal(colMap.date);
+              const openDate = getVal(colMap.openDate) || getVal(colMap.date);
+              const date = getVal(colMap.date) || openDate;
               const status = getVal(colMap.status);
 
               const candidate = { businessName: bName, nrc, phone, merchantCode: mCode };
@@ -422,16 +526,25 @@ export async function fetchPublicSpreadsheetData(
                 id: `gsheet-xlsx-${cleanId.slice(0, 6)}-${sIdx}-${rIdx}-${tabCount}`,
                 sheetName: sName,
                 sr: sr,
+                openDate: openDate || date,
+                date: date || openDate,
                 businessName: bName,
-                date: date,
-                merchantCode: mCode,
-                natureOfBusiness: nature,
-                ownerDirector: owner,
-                nrc: nrc,
-                nrcLast6: extractNrcLast6(nrc),
                 phone: phone,
                 normalizedPhone: normalizePhone(phone),
+                legalPersonalName: legalName || owner,
+                ownerDirector: owner || legalName,
+                nrc: nrc,
+                nrcLast6: extractNrcLast6(nrc),
+                fatherName: father,
+                dateOfBirth: dob,
+                gender: gender,
                 bankAcc: bank,
+                businessLicenseTypes: license,
+                natureOfBusiness: nature,
+                detailAddress: address,
+                ward: ward,
+                township: township,
+                merchantCode: mCode,
                 merchantPortalStatus: status,
               });
             }
@@ -559,10 +672,19 @@ export async function fetchPublicSpreadsheetData(
         const phone = getVal(colMap.phone);
         const mCode = getVal(colMap.merchantCode);
         const nature = getVal(colMap.natureOfBusiness);
-        const owner = getVal(colMap.ownerDirector);
+        const legalName = getVal(colMap.legalPersonalName);
+        const owner = getVal(colMap.ownerDirector) || legalName;
+        const father = getVal(colMap.fatherName);
+        const dob = getVal(colMap.dateOfBirth);
+        const gender = getVal(colMap.gender);
         const bank = getVal(colMap.bankAcc);
+        const license = getVal(colMap.businessLicenseTypes);
+        const address = getVal(colMap.detailAddress);
+        const ward = getVal(colMap.ward);
+        const township = getVal(colMap.township);
         const sr = getVal(colMap.sr) || count + 1;
-        const date = getVal(colMap.date);
+        const openDate = getVal(colMap.openDate) || getVal(colMap.date);
+        const date = getVal(colMap.date) || openDate;
         const status = getVal(colMap.status);
 
         const candidate = { businessName: bName, nrc, phone, merchantCode: mCode };
@@ -573,16 +695,25 @@ export async function fetchPublicSpreadsheetData(
           id: `gsheet-pub-${cleanId.slice(0, 6)}-${sIdx}-${rIdx}-${count}`,
           sheetName: sName,
           sr: sr,
+          openDate: openDate || date,
+          date: date || openDate,
           businessName: bName,
-          date: date,
-          merchantCode: mCode,
-          natureOfBusiness: nature,
-          ownerDirector: owner,
-          nrc: nrc,
-          nrcLast6: extractNrcLast6(nrc),
           phone: phone,
           normalizedPhone: normalizePhone(phone),
+          legalPersonalName: legalName || owner,
+          ownerDirector: owner || legalName,
+          nrc: nrc,
+          nrcLast6: extractNrcLast6(nrc),
+          fatherName: father,
+          dateOfBirth: dob,
+          gender: gender,
           bankAcc: bank,
+          businessLicenseTypes: license,
+          natureOfBusiness: nature,
+          detailAddress: address,
+          ward: ward,
+          township: township,
+          merchantCode: mCode,
           merchantPortalStatus: status,
         });
       }
@@ -643,6 +774,21 @@ export async function fetchPublicSpreadsheetData(
               const nrc = getVal(colMap.nrc);
               const phone = getVal(colMap.phone);
               const mCode = getVal(colMap.merchantCode);
+              const nature = getVal(colMap.natureOfBusiness);
+              const legalName = getVal(colMap.legalPersonalName);
+              const owner = getVal(colMap.ownerDirector) || legalName;
+              const father = getVal(colMap.fatherName);
+              const dob = getVal(colMap.dateOfBirth);
+              const gender = getVal(colMap.gender);
+              const bank = getVal(colMap.bankAcc);
+              const license = getVal(colMap.businessLicenseTypes);
+              const address = getVal(colMap.detailAddress);
+              const ward = getVal(colMap.ward);
+              const township = getVal(colMap.township);
+              const sr = getVal(colMap.sr) || cnt;
+              const openDate = getVal(colMap.openDate) || getVal(colMap.date);
+              const date = getVal(colMap.date) || openDate;
+              const status = getVal(colMap.status);
 
               const candidate = { businessName: bName, nrc, phone, merchantCode: mCode };
               if (!isValidMerchantRecord(candidate)) continue;
@@ -651,18 +797,27 @@ export async function fetchPublicSpreadsheetData(
               allRecords.push({
                 id: `gsheet-csv-${cleanId.slice(0, 6)}-${i}-${cnt}`,
                 sheetName: spreadsheetTitle || 'Google Sheet',
-                sr: getVal(colMap.sr) || cnt,
+                sr: sr,
+                openDate: openDate || date,
+                date: date || openDate,
                 businessName: bName,
-                date: getVal(colMap.date),
-                merchantCode: mCode,
-                natureOfBusiness: getVal(colMap.natureOfBusiness),
-                ownerDirector: getVal(colMap.ownerDirector),
-                nrc: nrc,
-                nrcLast6: extractNrcLast6(nrc),
                 phone: phone,
                 normalizedPhone: normalizePhone(phone),
-                bankAcc: getVal(colMap.bankAcc),
-                merchantPortalStatus: getVal(colMap.status),
+                legalPersonalName: legalName || owner,
+                ownerDirector: owner || legalName,
+                nrc: nrc,
+                nrcLast6: extractNrcLast6(nrc),
+                fatherName: father,
+                dateOfBirth: dob,
+                gender: gender,
+                bankAcc: bank,
+                businessLicenseTypes: license,
+                natureOfBusiness: nature,
+                detailAddress: address,
+                ward: ward,
+                township: township,
+                merchantCode: mCode,
+                merchantPortalStatus: status,
               });
             }
             if (cnt > 0) {
@@ -822,10 +977,19 @@ export async function fetchGoogleSpreadsheetData(
         const phone = getVal(colMap.phone);
         const mCode = getVal(colMap.merchantCode);
         const nature = getVal(colMap.natureOfBusiness);
-        const owner = getVal(colMap.ownerDirector);
+        const legalName = getVal(colMap.legalPersonalName);
+        const owner = getVal(colMap.ownerDirector) || legalName;
+        const father = getVal(colMap.fatherName);
+        const dob = getVal(colMap.dateOfBirth);
+        const gender = getVal(colMap.gender);
         const bank = getVal(colMap.bankAcc);
+        const license = getVal(colMap.businessLicenseTypes);
+        const address = getVal(colMap.detailAddress);
+        const ward = getVal(colMap.ward);
+        const township = getVal(colMap.township);
         const sr = getVal(colMap.sr) || sheetRecordsCount + 1;
-        const date = getVal(colMap.date);
+        const openDate = getVal(colMap.openDate) || getVal(colMap.date);
+        const date = getVal(colMap.date) || openDate;
         const status = getVal(colMap.status);
 
         if (!bName && !nrc && !phone && !mCode) continue;
@@ -835,16 +999,25 @@ export async function fetchGoogleSpreadsheetData(
           id: `gsheet-${cleanId.slice(0, 6)}-${sheetIdx}-${i}-${sheetRecordsCount}`,
           sheetName: sheetName.trim(),
           sr: sr,
+          openDate: openDate || date,
+          date: date || openDate,
           businessName: bName,
-          date: date,
-          merchantCode: mCode,
-          natureOfBusiness: nature,
-          ownerDirector: owner,
-          nrc: nrc,
-          nrcLast6: extractNrcLast6(nrc),
           phone: phone,
           normalizedPhone: normalizePhone(phone),
+          legalPersonalName: legalName || owner,
+          ownerDirector: owner || legalName,
+          nrc: nrc,
+          nrcLast6: extractNrcLast6(nrc),
+          fatherName: father,
+          dateOfBirth: dob,
+          gender: gender,
           bankAcc: bank,
+          businessLicenseTypes: license,
+          natureOfBusiness: nature,
+          detailAddress: address,
+          ward: ward,
+          township: township,
+          merchantCode: mCode,
           merchantPortalStatus: status,
         });
       }

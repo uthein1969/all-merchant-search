@@ -119,17 +119,59 @@ export function filterMerchants(
       return false;
     }
 
-    // Global Query filter (searches across Business Name, NRC last 6 & full, Phone, Owner, Merchant Code, Bank Acc)
+    // Township specific filter
+    if (filters.township && filters.township !== 'ALL') {
+      const tQ = filters.township.trim().toLowerCase();
+      const mTsp = (m.township || '').trim().toLowerCase();
+      if (mTsp !== tQ) {
+        return false;
+      }
+    }
+
+    // Ward specific filter
+    if (filters.ward && filters.ward !== 'ALL') {
+      const wQ = filters.ward.trim().toLowerCase();
+      const mWard = (m.ward || '').trim().toLowerCase();
+      if (mWard !== wQ) {
+        return false;
+      }
+    }
+
+    // Global Query filter (searches across all 14 fields)
     if (globalQ) {
       const inBusiness = m.businessName.toLowerCase().includes(globalQ);
       const inNrc = m.nrc.toLowerCase().includes(globalQ) || m.nrcLast6.includes(globalQ);
       const inPhone = m.normalizedPhone.includes(normalizePhone(globalQ)) || m.phone.toLowerCase().includes(globalQ);
-      const inOwner = m.ownerDirector.toLowerCase().includes(globalQ);
+      const inOwner = (m.legalPersonalName || m.ownerDirector || '').toLowerCase().includes(globalQ);
+      const inFather = (m.fatherName || '').toLowerCase().includes(globalQ);
+      const inDob = (m.dateOfBirth || '').toLowerCase().includes(globalQ);
       const inCode = m.merchantCode.toLowerCase().includes(globalQ);
       const inBank = m.bankAcc.toLowerCase().includes(globalQ);
+      const inLicense = (m.businessLicenseTypes || '').toLowerCase().includes(globalQ);
+      const inNature = m.natureOfBusiness.toLowerCase().includes(globalQ);
+      const inAddress = (m.detailAddress || '').toLowerCase().includes(globalQ);
+      const inWard = (m.ward || '').toLowerCase().includes(globalQ);
+      const inTownship = (m.township || '').toLowerCase().includes(globalQ);
       const inSheet = m.sheetName.toLowerCase().includes(globalQ);
+      const inOpenDate = (m.openDate || m.date || '').toLowerCase().includes(globalQ);
 
-      if (!inBusiness && !inNrc && !inPhone && !inOwner && !inCode && !inBank && !inSheet) {
+      if (
+        !inBusiness &&
+        !inNrc &&
+        !inPhone &&
+        !inOwner &&
+        !inFather &&
+        !inDob &&
+        !inCode &&
+        !inBank &&
+        !inLicense &&
+        !inNature &&
+        !inAddress &&
+        !inWard &&
+        !inTownship &&
+        !inSheet &&
+        !inOpenDate
+      ) {
         return false;
       }
     }

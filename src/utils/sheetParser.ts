@@ -9,9 +9,18 @@ interface HeaderMapping {
   merchantCodeKey?: string;
   natureKey?: string;
   ownerKey?: string;
+  legalPersonalNameKey?: string;
+  fatherNameKey?: string;
+  dobKey?: string;
+  genderKey?: string;
   bankKey?: string;
+  licenseKey?: string;
+  addressKey?: string;
+  wardKey?: string;
+  townshipKey?: string;
   srKey?: string;
   dateKey?: string;
+  openDateKey?: string;
   statusKey?: string;
 }
 
@@ -30,15 +39,24 @@ function findMatchingKey(keys: string[], patterns: string[]): string | undefined
 function detectHeaders(rowObj: Record<string, unknown>): HeaderMapping {
   const keys = Object.keys(rowObj);
   return {
-    businessNameKey: findMatchingKey(keys, ['businessname', 'shopname', 'merchantname', 'business', 'shop', 'name']),
-    nrcKey: findMatchingKey(keys, ['nrc', 'nationalid', 'nrcno', 'idcard', 'nrcnumber']),
-    phoneKey: findMatchingKey(keys, ['ph', 'phone', 'phonenumber', 'tel', 'mobile', 'contact']),
+    businessNameKey: findMatchingKey(keys, ['merchantbusinessname', 'businessname', 'shopname', 'merchantname', 'business', 'shop', 'name']),
+    nrcKey: findMatchingKey(keys, ['nrcpassportno', 'nrcpassport', 'nrc', 'nationalid', 'nrcno', 'idcard', 'nrcnumber', 'passport', 'passportno']),
+    phoneKey: findMatchingKey(keys, ['merchantmobilenumber', 'mobilenumber', 'ph', 'phone', 'phonenumber', 'tel', 'mobile', 'contact']),
+    legalPersonalNameKey: findMatchingKey(keys, ['legalpersonalname', 'legalname', 'personalname', 'ownerdirector', 'owner', 'director', 'proprietor', 'fullname', 'name']),
+    ownerKey: findMatchingKey(keys, ['ownerdirector', 'owner', 'director', 'proprietor', 'legalpersonalname', 'name']),
+    fatherNameKey: findMatchingKey(keys, ['fathername', 'father', 'fathersname', 'dadsname']),
+    dobKey: findMatchingKey(keys, ['dateofbirth', 'dob', 'birthdate', 'birthday']),
+    genderKey: findMatchingKey(keys, ['gender', 'sex']),
     merchantCodeKey: findMatchingKey(keys, ['merchantcode', 'code', 'mid', 'merchantid']),
-    natureKey: findMatchingKey(keys, ['natureofbusiness', 'nature', 'businesstype', 'category']),
-    ownerKey: findMatchingKey(keys, ['ownerdirector', 'owner', 'director', 'proprietor', 'name']),
-    bankKey: findMatchingKey(keys, ['bankacc', 'bankaccount', 'accno', 'accountno', 'bank']),
+    natureKey: findMatchingKey(keys, ['natureofbusiness', 'nature', 'businesstype', 'category', 'lineofbusiness']),
+    bankKey: findMatchingKey(keys, ['bankaccno', 'bankacc', 'bankaccount', 'accno', 'accountno', 'bank']),
+    licenseKey: findMatchingKey(keys, ['businesslicensetypes', 'businesslicensetype', 'licensetypes', 'licensetype', 'license', 'businesslicense']),
+    addressKey: findMatchingKey(keys, ['businesscompanydetailaddress', 'companydetailaddress', 'businessaddress', 'detailaddress', 'address', 'companyaddress', 'streetaddress']),
+    wardKey: findMatchingKey(keys, ['ward', 'wardname', 'quarter']),
+    townshipKey: findMatchingKey(keys, ['township', 'townshipname', 'tsp', 'city', 'town']),
     srKey: findMatchingKey(keys, ['sr', 'srno', 'no', 'serial']),
-    dateKey: findMatchingKey(keys, ['date', 'regdate', 'createddate']),
+    openDateKey: findMatchingKey(keys, ['opendate', 'date', 'regdate', 'createddate', 'entrydate']),
+    dateKey: findMatchingKey(keys, ['opendate', 'date', 'regdate', 'createddate']),
     statusKey: findMatchingKey(keys, ['status', 'merchantportal', 'merchantportalstatus', 'remark']),
   };
 }
@@ -74,10 +92,27 @@ export function parseExcelFile(
       const phone = headers.phoneKey ? String(row[headers.phoneKey] ?? '').trim() : '';
       const mCode = headers.merchantCodeKey ? String(row[headers.merchantCodeKey] ?? '').trim() : '';
       const nature = headers.natureKey ? String(row[headers.natureKey] ?? '').trim() : '';
-      const owner = headers.ownerKey ? String(row[headers.ownerKey] ?? '').trim() : '';
+      const legalName = headers.legalPersonalNameKey
+        ? String(row[headers.legalPersonalNameKey] ?? '').trim()
+        : headers.ownerKey
+        ? String(row[headers.ownerKey] ?? '').trim()
+        : '';
+      const owner = headers.ownerKey ? String(row[headers.ownerKey] ?? '').trim() : legalName;
+      const father = headers.fatherNameKey ? String(row[headers.fatherNameKey] ?? '').trim() : '';
+      const dob = headers.dobKey ? String(row[headers.dobKey] ?? '').trim() : '';
+      const gender = headers.genderKey ? String(row[headers.genderKey] ?? '').trim() : '';
       const bank = headers.bankKey ? String(row[headers.bankKey] ?? '').trim() : '';
+      const license = headers.licenseKey ? String(row[headers.licenseKey] ?? '').trim() : '';
+      const address = headers.addressKey ? String(row[headers.addressKey] ?? '').trim() : '';
+      const ward = headers.wardKey ? String(row[headers.wardKey] ?? '').trim() : '';
+      const township = headers.townshipKey ? String(row[headers.townshipKey] ?? '').trim() : '';
       const sr = headers.srKey ? String(row[headers.srKey] ?? '').trim() : idx + 1;
-      const date = headers.dateKey ? String(row[headers.dateKey] ?? '').trim() : '';
+      const openDate = headers.openDateKey
+        ? String(row[headers.openDateKey] ?? '').trim()
+        : headers.dateKey
+        ? String(row[headers.dateKey] ?? '').trim()
+        : '';
+      const date = headers.dateKey ? String(row[headers.dateKey] ?? '').trim() : openDate;
       const status = headers.statusKey ? String(row[headers.statusKey] ?? '').trim() : '';
 
       // Skip row if completely empty or missing both business name, NRC, and phone
@@ -89,16 +124,25 @@ export function parseExcelFile(
         sheetName: sheetName.trim() || 'Uploaded Sheet',
         rowNumber: idx + 2,
         sr: sr || idx + 1,
+        openDate: openDate || date,
+        date: date || openDate,
         businessName: bName,
-        date: date,
-        merchantCode: mCode,
-        natureOfBusiness: nature,
-        ownerDirector: owner,
-        nrc: nrc,
-        nrcLast6: extractNrcLast6(nrc),
         phone: phone,
         normalizedPhone: normalizePhone(phone),
+        legalPersonalName: legalName || owner,
+        ownerDirector: owner || legalName,
+        nrc: nrc,
+        nrcLast6: extractNrcLast6(nrc),
+        fatherName: father,
+        dateOfBirth: dob,
+        gender: gender,
         bankAcc: bank,
+        businessLicenseTypes: license,
+        natureOfBusiness: nature,
+        detailAddress: address,
+        ward: ward,
+        township: township,
+        merchantCode: mCode,
         merchantPortalStatus: status,
       });
     });
@@ -143,10 +187,27 @@ export function parsePastedData(
     const phone = headers.phoneKey ? String(row[headers.phoneKey] ?? '').trim() : '';
     const mCode = headers.merchantCodeKey ? String(row[headers.merchantCodeKey] ?? '').trim() : '';
     const nature = headers.natureKey ? String(row[headers.natureKey] ?? '').trim() : '';
-    const owner = headers.ownerKey ? String(row[headers.ownerKey] ?? '').trim() : '';
+    const legalName = headers.legalPersonalNameKey
+      ? String(row[headers.legalPersonalNameKey] ?? '').trim()
+      : headers.ownerKey
+      ? String(row[headers.ownerKey] ?? '').trim()
+      : '';
+    const owner = headers.ownerKey ? String(row[headers.ownerKey] ?? '').trim() : legalName;
+    const father = headers.fatherNameKey ? String(row[headers.fatherNameKey] ?? '').trim() : '';
+    const dob = headers.dobKey ? String(row[headers.dobKey] ?? '').trim() : '';
+    const gender = headers.genderKey ? String(row[headers.genderKey] ?? '').trim() : '';
     const bank = headers.bankKey ? String(row[headers.bankKey] ?? '').trim() : '';
+    const license = headers.licenseKey ? String(row[headers.licenseKey] ?? '').trim() : '';
+    const address = headers.addressKey ? String(row[headers.addressKey] ?? '').trim() : '';
+    const ward = headers.wardKey ? String(row[headers.wardKey] ?? '').trim() : '';
+    const township = headers.townshipKey ? String(row[headers.townshipKey] ?? '').trim() : '';
     const sr = headers.srKey ? String(row[headers.srKey] ?? '').trim() : idx + 1;
-    const date = headers.dateKey ? String(row[headers.dateKey] ?? '').trim() : '';
+    const openDate = headers.openDateKey
+      ? String(row[headers.openDateKey] ?? '').trim()
+      : headers.dateKey
+      ? String(row[headers.dateKey] ?? '').trim()
+      : '';
+    const date = headers.dateKey ? String(row[headers.dateKey] ?? '').trim() : openDate;
     const status = headers.statusKey ? String(row[headers.statusKey] ?? '').trim() : '';
 
     if (!bName && !nrc && !phone && !mCode) return;
@@ -155,16 +216,25 @@ export function parsePastedData(
       id: `paste-${idx}-${Date.now()}`,
       sheetName: targetSheetName.trim() || 'Pasted Sheet',
       sr: sr || idx + 1,
+      openDate: openDate || date,
+      date: date || openDate,
       businessName: bName,
-      date: date,
-      merchantCode: mCode,
-      natureOfBusiness: nature,
-      ownerDirector: owner,
-      nrc: nrc,
-      nrcLast6: extractNrcLast6(nrc),
       phone: phone,
       normalizedPhone: normalizePhone(phone),
+      legalPersonalName: legalName || owner,
+      ownerDirector: owner || legalName,
+      nrc: nrc,
+      nrcLast6: extractNrcLast6(nrc),
+      fatherName: father,
+      dateOfBirth: dob,
+      gender: gender,
       bankAcc: bank,
+      businessLicenseTypes: license,
+      natureOfBusiness: nature,
+      detailAddress: address,
+      ward: ward,
+      township: township,
+      merchantCode: mCode,
       merchantPortalStatus: status,
     });
   });
@@ -176,22 +246,29 @@ export function parsePastedData(
 }
 
 /**
- * Export merchant records to CSV or Excel
+ * Export merchant records to CSV or Excel with all 14 requested KYC columns
  */
 export function exportToCSV(records: MerchantRecord[], fileName: string = 'Merchant_KYC_Export.csv'): void {
   const exportData = records.map((r, idx) => ({
-    'Sheet Name': r.sheetName,
     'SR': r.sr ?? idx + 1,
-    'BUSINESS NAME': r.businessName,
-    'DATE': r.date,
-    'MERCHANT CODE': r.merchantCode,
-    'NATURE OF BUSINESS': r.natureOfBusiness,
-    'OWNER/DIRECTOR': r.ownerDirector,
-    'NRC': r.nrc,
-    'NRC LAST 6': r.nrcLast6,
+    'OPEN DATE': r.openDate || r.date || '',
+    'MERCHANT BUSINESS NAME': r.businessName,
     'MERCHANT MOBILE NUMBER': r.phone,
-    'BANK ACC': r.bankAcc,
-    'STATUS': r.merchantPortalStatus,
+    'LEGAL PERSONAL NAME': r.legalPersonalName || r.ownerDirector || '',
+    'NRC / PASSPORT NO': r.nrc,
+    'NRC LAST 6': r.nrcLast6,
+    'FATHER NAME': r.fatherName || '',
+    'DATE OF BIRTH': r.dateOfBirth || '',
+    'GENDER': r.gender || '',
+    'BANK ACC NO': r.bankAcc,
+    'Business License Types': r.businessLicenseTypes || '',
+    'NATURE OF BUSINESS': r.natureOfBusiness,
+    'BUSINESS / COMPANY DETAIL ADDRESS': r.detailAddress || '',
+    'WARD': r.ward || '',
+    'TOWNSHIP': r.township || '',
+    'SHEET NAME': r.sheetName,
+    'MERCHANT CODE': r.merchantCode,
+    'STATUS': r.merchantPortalStatus || '',
   }));
 
   const ws = XLSX.utils.json_to_sheet(exportData);

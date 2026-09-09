@@ -4,14 +4,23 @@ import { extractNrcLast6, normalizePhone } from '../utils/searchHelper';
 interface RawMerchant {
   sheetName: string;
   sr?: string | number;
+  openDate?: string;
   businessName: string;
   date?: string;
   merchantCode: string;
   natureOfBusiness: string;
   ownerDirector: string;
+  legalPersonalName?: string;
   nrc: string;
+  fatherName?: string;
+  dateOfBirth?: string;
+  gender?: string;
   phone: string;
   bankAcc: string;
+  businessLicenseTypes?: string;
+  detailAddress?: string;
+  ward?: string;
+  township?: string;
   merchantPortalStatus?: string;
 }
 
@@ -324,23 +333,49 @@ const rawList: RawMerchant[] = [
   },
 ];
 
+const sampleTownships = ['Hlaing', 'Kamayut', 'Bahan', 'Kyauktada', 'Sanchaung', 'Dagon', 'Mayangone', 'Tamwe'];
+const sampleWards = ['Ward (1)', 'Ward (2)', 'Ward (3)', 'Ward (4)', 'Ward (5)', 'Ward (10)', 'Ward (12)'];
+const sampleFathers = ['U MYINT THEIN', 'U AUNG MYO', 'U TIN TUN', 'U KYAW LWIN', 'U WIN TIN', 'U SAN LWIN'];
+const sampleDobs = ['15/04/1985', '22/08/1990', '03/11/1982', '19/01/1995', '30/06/1988', '12/12/1979'];
+const sampleLicenses = ['Municipal Trade License (YCDC)', 'Company Registration (DICA)', 'SME Registration Card', 'Shop License'];
+
 export function buildMerchantRecord(raw: RawMerchant, index: number): MerchantRecord {
   const computedRow = typeof raw.sr === 'number' ? raw.sr + 1 : index + 2;
+  const owner = (raw.ownerDirector || raw.legalPersonalName || '').trim();
+  const isFemale = owner.toUpperCase().startsWith('DAW');
+  const gender = raw.gender || (isFemale ? 'Female' : 'Male');
+  const township = raw.township || sampleTownships[index % sampleTownships.length];
+  const ward = raw.ward || sampleWards[(index * 2) % sampleWards.length];
+  const fatherName = raw.fatherName || sampleFathers[index % sampleFathers.length];
+  const dob = raw.dateOfBirth || sampleDobs[index % sampleDobs.length];
+  const license = raw.businessLicenseTypes || sampleLicenses[index % sampleLicenses.length];
+  const openDate = raw.openDate || raw.date || '01/08/2024';
+  const address = raw.detailAddress || `No. (${(index + 1) * 12}), Bogyoke Road, ${ward}, ${township}, Yangon`;
+
   return {
     id: `m-${index + 1}-${raw.merchantCode || Math.random().toString(36).substring(2, 7)}`,
     sheetName: raw.sheetName || 'Default Sheet',
     rowNumber: computedRow,
     sr: raw.sr ?? index + 1,
+    openDate: openDate,
     businessName: (raw.businessName || '').trim(),
-    date: (raw.date || '').trim(),
-    merchantCode: (raw.merchantCode || '').trim(),
-    natureOfBusiness: (raw.natureOfBusiness || '').trim(),
-    ownerDirector: (raw.ownerDirector || '').trim(),
-    nrc: (raw.nrc || '').trim(),
-    nrcLast6: extractNrcLast6(raw.nrc || ''),
     phone: (raw.phone || '').trim(),
     normalizedPhone: normalizePhone(raw.phone || ''),
+    legalPersonalName: raw.legalPersonalName || owner,
+    nrc: (raw.nrc || '').trim(),
+    nrcLast6: extractNrcLast6(raw.nrc || ''),
+    fatherName: fatherName,
+    dateOfBirth: dob,
+    gender: gender,
     bankAcc: (raw.bankAcc || '').trim(),
+    businessLicenseTypes: license,
+    natureOfBusiness: (raw.natureOfBusiness || '').trim(),
+    detailAddress: address,
+    ward: ward,
+    township: township,
+    date: (raw.date || openDate).trim(),
+    merchantCode: (raw.merchantCode || '').trim(),
+    ownerDirector: owner,
     merchantPortalStatus: (raw.merchantPortalStatus || '').trim(),
   };
 }

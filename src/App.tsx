@@ -13,7 +13,7 @@ import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { GoogleUser } from './services/googleSheetsService';
 import { CheckCircle2 } from 'lucide-react';
 
-const STORAGE_KEY = 'merchant_kyc_data_v1';
+const STORAGE_KEY = 'merchant_kyc_data_v2';
 const SHEET_META_KEY = 'connected_sheet_meta_v1';
 
 export default function App() {
@@ -65,6 +65,9 @@ export default function App() {
     nrcLast6Only: true, // Default to true as user requested NRC (Match last 6 digits)
     phone: '',
     sheetName: 'ALL',
+    township: 'ALL',
+    ward: 'ALL',
+    groupBy: 'none',
     natureOfBusiness: '',
     merchantCode: '',
   });
@@ -98,6 +101,30 @@ export default function App() {
     });
     return Array.from(set).sort();
   }, [merchants]);
+
+  // Compute unique townships
+  const townships = useMemo<string[]>(() => {
+    const set = new Set<string>();
+    merchants.forEach((m) => {
+      if (m.township?.trim()) set.add(m.township.trim());
+    });
+    return Array.from(set).sort();
+  }, [merchants]);
+
+  // Compute unique wards (optionally filtered by currently selected township)
+  const wards = useMemo<string[]>(() => {
+    const set = new Set<string>();
+    merchants.forEach((m) => {
+      if (filters.township && filters.township !== 'ALL') {
+        if (m.township?.trim().toLowerCase() === filters.township.trim().toLowerCase()) {
+          if (m.ward?.trim()) set.add(m.ward.trim());
+        }
+      } else {
+        if (m.ward?.trim()) set.add(m.ward.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [merchants, filters.township]);
 
   // 6. Filter merchants based on current criteria
   const filteredMerchants = useMemo(() => {
@@ -185,6 +212,8 @@ export default function App() {
           onChangeFilters={setFilters}
           sheets={sheetsMeta}
           natures={naturesOfBusiness}
+          townships={townships}
+          wards={wards}
           totalResults={filteredMerchants.length}
           totalRecords={merchants.length}
         />
@@ -210,6 +239,7 @@ export default function App() {
           activeNrcSearch={filters.nrc}
           activePhoneSearch={filters.phone}
           activeBusinessSearch={filters.businessName}
+          groupBy={filters.groupBy}
         />
       </main>
 

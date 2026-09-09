@@ -1,7 +1,22 @@
 import React, { useState } from 'react';
 import { MerchantRecord } from '../types';
 import { formatNrcParts } from '../utils/searchHelper';
-import { X, Copy, Check, Phone, Store, User, CreditCard, Building2, Calendar, FileSpreadsheet, ShieldCheck } from 'lucide-react';
+import {
+  X,
+  Copy,
+  Check,
+  Phone,
+  Store,
+  User,
+  CreditCard,
+  Building2,
+  Calendar,
+  FileSpreadsheet,
+  ShieldCheck,
+  MapPin,
+  Building,
+  FileCheck,
+} from 'lucide-react';
 
 interface MerchantDetailModalProps {
   merchant: MerchantRecord | null;
@@ -21,11 +36,12 @@ export const MerchantDetailModal: React.FC<MerchantDetailModalProps> = ({ mercha
 
   const nrcParts = formatNrcParts(merchant.nrc);
   const srDisplay = merchant.sr !== undefined ? merchant.sr : '-';
+  const openDateDisplay = merchant.openDate || merchant.date || '-';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div
-        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200"
+        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200"
         role="dialog"
         aria-modal="true"
       >
@@ -61,36 +77,15 @@ export const MerchantDetailModal: React.FC<MerchantDetailModalProps> = ({ mercha
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-4 max-h-[78vh] overflow-y-auto">
-          {/* Spreadsheet Source Location Banner */}
-          <div className="bg-amber-50/80 border border-amber-200/90 rounded-xl p-3.5 flex items-center justify-between gap-3 shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-900 flex items-center justify-center shrink-0 border border-amber-200">
-                <FileSpreadsheet className="w-5 h-5 text-amber-800" />
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
-                  Spreadsheet Location (Sheet & SR)
-                </span>
-                <span className="text-xs font-bold text-slate-900">
-                  Sheet: <span className="text-emerald-800 font-semibold">{merchant.sheetName}</span>
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="px-3 py-1 rounded-lg font-mono font-black text-xs bg-amber-200/90 text-amber-950 border border-amber-300 shadow-2xs">
-                SR #{srDisplay}
-              </span>
-            </div>
-          </div>
+        <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {/* Key Identification Cards: NRC & Phone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* NRC Box */}
-            <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-3.5 space-y-1 relative">
+            <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-1 relative">
               <div className="flex items-center justify-between text-xs font-semibold text-emerald-900">
                 <span className="flex items-center gap-1">
                   <CreditCard className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>NRC NUMBER</span>
+                  <span>NRC / PASSPORT NO</span>
                 </span>
                 <button
                   onClick={() => copyToClipboard(merchant.nrc, 'nrc')}
@@ -121,7 +116,7 @@ export const MerchantDetailModal: React.FC<MerchantDetailModalProps> = ({ mercha
             </div>
 
             {/* Merchant Mobile Number Box */}
-            <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-3.5 space-y-1 relative">
+            <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 space-y-1 relative">
               <div className="flex items-center justify-between text-xs font-semibold text-emerald-900">
                 <span className="flex items-center gap-1">
                   <Phone className="w-3.5 h-3.5 text-emerald-700" />
@@ -150,53 +145,105 @@ export const MerchantDetailModal: React.FC<MerchantDetailModalProps> = ({ mercha
             </div>
           </div>
 
-          {/* Details Table */}
-          <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 overflow-hidden text-sm">
-            {/* Owner / Director */}
-            <div className="flex items-center justify-between p-3 bg-white">
-              <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-gray-400" />
-                OWNER / DIRECTOR
-              </span>
-              <span className="font-semibold text-gray-900 text-right">{merchant.ownerDirector || '-'}</span>
+          {/* 14 Columns Full KYC Profile */}
+          <div className="rounded-xl border border-gray-200 overflow-hidden divide-y divide-gray-100 text-xs">
+            {/* Section 1: Business Profile */}
+            <div className="bg-gray-100/70 px-3.5 py-2 font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+              <Store className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Business Profile</span>
             </div>
 
-            {/* Merchant Code */}
-            <div className="flex items-center justify-between p-3 bg-gray-50/60">
-              <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
-                MERCHANT CODE
+            {/* OPEN DATE */}
+            <div className="flex items-center justify-between p-3 bg-white">
+              <span className="font-medium text-gray-500 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                OPEN DATE
               </span>
-              <div className="flex items-center gap-1.5">
-                <span className="font-mono font-bold text-gray-800">{merchant.merchantCode || '-'}</span>
-                {merchant.merchantCode && (
-                  <button
-                    onClick={() => copyToClipboard(merchant.merchantCode, 'code')}
-                    className="p-1 text-gray-400 hover:text-gray-700 cursor-pointer"
-                  >
-                    {copiedKey === 'code' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                  </button>
-                )}
-              </div>
+              <span className="font-mono font-bold text-gray-900">{openDateDisplay}</span>
             </div>
 
-            {/* Nature of Business */}
+            {/* MERCHANT BUSINESS NAME */}
+            <div className="flex items-center justify-between p-3 bg-gray-50/50">
+              <span className="font-medium text-gray-500 flex items-center gap-1.5">
+                <Store className="w-3.5 h-3.5 text-gray-400" />
+                MERCHANT BUSINESS NAME
+              </span>
+              <span className="font-bold text-emerald-950 text-right">{merchant.businessName || '-'}</span>
+            </div>
+
+            {/* NATURE OF BUSINESS */}
             <div className="flex items-center justify-between p-3 bg-white">
-              <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+              <span className="font-medium text-gray-500 flex items-center gap-1.5">
                 <Building2 className="w-3.5 h-3.5 text-gray-400" />
                 NATURE OF BUSINESS
               </span>
               <span className="font-medium text-gray-800 text-right">{merchant.natureOfBusiness || '-'}</span>
             </div>
 
-            {/* Bank Account */}
-            <div className="flex items-center justify-between p-3 bg-gray-50/60">
-              <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
+            {/* Business License Types */}
+            <div className="flex items-center justify-between p-3 bg-gray-50/50">
+              <span className="font-medium text-gray-500 flex items-center gap-1.5">
+                <FileCheck className="w-3.5 h-3.5 text-gray-400" />
+                BUSINESS LICENSE TYPES
+              </span>
+              <span className="font-medium text-gray-800 text-right">{merchant.businessLicenseTypes || '-'}</span>
+            </div>
+
+            {/* Section 2: Personal KYC Details */}
+            <div className="bg-gray-100/70 px-3.5 py-2 font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Personal & Owner KYC Details</span>
+            </div>
+
+            {/* LEGAL PERSONAL NAME */}
+            <div className="flex items-center justify-between p-3 bg-white">
+              <span className="font-medium text-gray-500 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-gray-400" />
+                LEGAL PERSONAL NAME
+              </span>
+              <span className="font-bold text-gray-900 text-right">
+                {merchant.legalPersonalName || merchant.ownerDirector || '-'}
+              </span>
+            </div>
+
+            {/* FATHER NAME */}
+            <div className="flex items-center justify-between p-3 bg-gray-50/50">
+              <span className="font-medium text-gray-500 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-gray-400" />
+                FATHER NAME
+              </span>
+              <span className="font-semibold text-gray-800 text-right">{merchant.fatherName || '-'}</span>
+            </div>
+
+            {/* DATE OF BIRTH & GENDER */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-100 bg-white">
+              <div className="flex items-center justify-between p-3">
+                <span className="font-medium text-gray-500 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                  DATE OF BIRTH
+                </span>
+                <span className="font-mono font-semibold text-gray-900">{merchant.dateOfBirth || '-'}</span>
+              </div>
+              <div className="flex items-center justify-between p-3">
+                <span className="font-medium text-gray-500">GENDER</span>
+                <span className="font-semibold text-gray-900">{merchant.gender || '-'}</span>
+              </div>
+            </div>
+
+            {/* Section 3: Financial & Location */}
+            <div className="bg-gray-100/70 px-3.5 py-2 font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+              <CreditCard className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Banking & Location Details</span>
+            </div>
+
+            {/* BANK ACC NO */}
+            <div className="flex items-center justify-between p-3 bg-white">
+              <span className="font-medium text-gray-500 flex items-center gap-1.5">
                 <CreditCard className="w-3.5 h-3.5 text-gray-400" />
-                BANK ACC
+                BANK ACC NO
               </span>
               <div className="flex items-center gap-1.5">
-                <span className="font-mono font-medium text-gray-800 text-xs sm:text-sm">{merchant.bankAcc || '-'}</span>
+                <span className="font-mono font-bold text-gray-900 text-xs sm:text-sm">{merchant.bankAcc || '-'}</span>
                 {merchant.bankAcc && (
                   <button
                     onClick={() => copyToClipboard(merchant.bankAcc, 'bank')}
@@ -208,16 +255,47 @@ export const MerchantDetailModal: React.FC<MerchantDetailModalProps> = ({ mercha
               </div>
             </div>
 
-            {/* SR & Date */}
-            <div className="flex items-center justify-between p-3 bg-white">
-              <span className="text-xs font-medium text-gray-500 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                SR / REGISTRATION DATE
-              </span>
-              <span className="text-xs text-gray-700">
-                SR #{merchant.sr ?? '-'} {merchant.date ? `• Date: ${merchant.date}` : ''}
-              </span>
+            {/* TOWNSHIP & WARD */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-100 bg-gray-50/50">
+              <div className="flex items-center justify-between p-3">
+                <span className="font-medium text-gray-500 flex items-center gap-1.5">
+                  <Building className="w-3.5 h-3.5 text-emerald-600" />
+                  TOWNSHIP
+                </span>
+                <span className="font-bold text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded">
+                  {merchant.township || '-'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3">
+                <span className="font-medium text-gray-500 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-amber-600" />
+                  WARD
+                </span>
+                <span className="font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded">
+                  {merchant.ward || '-'}
+                </span>
+              </div>
             </div>
+
+            {/* BUSINESS / COMPANY DETAIL ADDRESS */}
+            <div className="p-3 bg-white space-y-1">
+              <span className="font-medium text-gray-500 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                BUSINESS / COMPANY DETAIL ADDRESS
+              </span>
+              <p className="text-gray-800 font-medium pl-5">{merchant.detailAddress || '-'}</p>
+            </div>
+
+            {/* MERCHANT CODE & SYSTEM ID */}
+            {merchant.merchantCode && (
+              <div className="flex items-center justify-between p-3 bg-gray-50/50">
+                <span className="font-medium text-gray-500 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
+                  MERCHANT CODE
+                </span>
+                <span className="font-mono font-bold text-gray-800">{merchant.merchantCode}</span>
+              </div>
+            )}
           </div>
         </div>
 
